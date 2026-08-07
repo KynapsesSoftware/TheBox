@@ -1,0 +1,2 @@
+allowBuilds:
+  '@ffprobe-installer/linux-x64': true

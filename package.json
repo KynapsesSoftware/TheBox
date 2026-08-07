@@ -1,0 +1,24 @@
+{
+  "name": "thebox",
+  "version": "0.1.0",
+  "description": "The Box — retro-inspired local TV platform with a Ceefax-style guide",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "retro",
+    "tv",
+    "ceefax",
+    "media-player"
+  ],
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "express": "^4.21.2"
+  }
+}

@@ -1,0 +1,9 @@
+{
+    "displayName": "BBC 1",
+    "pageNumber": 101,
+    "color": "cyan",
+    "schedule": {
+      "startTime": "06:00",
+      "endTime": "23:00"
+    }
+  }

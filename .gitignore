@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+Thumbs.db
+.private/
+*.log
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.avi
+.env
+

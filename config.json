@@ -1,0 +1,18 @@
+{
+  "channelsRoot": "./channels",
+  "host": "0.0.0.0",
+  "port": 8080,
+  "videoExtensions": [".mp4", ".mkv", ".webm", ".mov"],
+  "scanIntervalMinutes": 60,
+  "schedule": {
+    "timezone": "Australia/Adelaide",
+    "seedBy": "day",
+    "hoursToGenerate": 24,
+    "defaultStartTime": "00:00",
+    "defaultEndTime": "24:00"
+  },
+  "ui": {
+    "title": "The Box",
+    "defaultPage": 100
+  }
+}

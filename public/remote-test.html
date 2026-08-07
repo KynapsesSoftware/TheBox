@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box - Remote Test</title>
+    <link rel="stylesheet" href="/css/thebox.css" />
+  </head>
+  <body class="layout-fixed">
+    <div class="page-shell">
+      <header class="header">
+        <div class="header-row">
+          <div>
+            <div class="title">REMOTE TEST</div>
+            <div class="subtitle">KEY CODE TROUBLESHOOTING</div>
+          </div>
+          <div class="subtitle">PAGE 400</div>
+        </div>
+        <div class="status-bar">
+          <span id="status-text">INITIALISING...</span>
+          <span id="clock-text"></span>
+        </div>
+      </header>
+
+      <main class="screen page-main no-scroll">
+        <section class="panel custom-scrollbar">
+          <h2>LAST KEY PRESS</h2>
+          <div id="last-key-display" class="remote-last-key help">Waiting for input...</div>
+
+          <h2>PAGE NUMBER BUFFER</h2>
+          <p class="help">Dial 100 / 200 / 300 / 400 to navigate. Buffer: <span id="page-buffer-display">—</span></p>
+
+          <h2>KEY MAP</h2>
+          <div class="remote-map help">
+            <p><span class="color-red">RED</span> → Page 100 (Home)</p>
+            <p><span class="color-green">GREEN</span> → Page 200 (Guide)</p>
+            <p><span class="color-yellow">YELLOW</span> → Page 300 (Watch)</p>
+            <p><span class="color-blue">BLUE</span> → Page 400 (This page)</p>
+            <p>HOME → Page 100 | BACK → Previous page</p>
+            <p>↑ ↓ + ENTER → Navigate lists | PG+/PG- → Page up/down in lists</p>
+            <p>PLAY/PAUSE, STOP, REW, FF → Video controls on watch page</p>
+            <p>VOLUME → Handled by the operating system (logged here only)</p>
+          </div>
+
+          <h2>EVENT LOG</h2>
+          <div id="key-log" class="remote-log"></div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <section class="panel help">
+          <p><a href="/">PAGE 100 - CHANNEL INDEX</a> | <a href="/guide.html">PAGE 200 - TV GUIDE</a></p>
+        </section>
+      </footer>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/remote.js"></script>
+    <script src="/js/dev-guide.js"></script>
+    <script src="/js/remote-test.js"></script>
+  </body>
+</html>

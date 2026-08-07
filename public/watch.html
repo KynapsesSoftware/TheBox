@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box - Now Watching</title>
+    <link rel="stylesheet" href="/css/thebox.css" />
+  </head>
+  <body class="layout-fixed">
+    <div class="page-shell">
+      <header class="header">
+        <div class="header-row">
+          <div>
+            <div class="title" id="channel-name">CHANNEL</div>
+            <div class="subtitle">LIVE BROADCAST SIMULATION</div>
+          </div>
+          <div class="subtitle">PAGE 300</div>
+        </div>
+        <div class="status-bar">
+          <span id="status-text">TUNING...</span>
+          <span id="clock-text"></span>
+        </div>
+      </header>
+
+      <main class="screen page-main no-scroll">
+        <section>
+          <div class="watch-layout">
+            <div class="watch-main">
+              <div class="video-stage">
+                <video id="player" controls autoplay playsinline></video>
+                <div class="now-overlay panel">
+                  <h2 id="now-title" class="now-title">NOW SHOWING</h2>
+                  <span id="now-times" class="color-green"></span>
+                </div>
+              </div>
+            </div>
+
+            <aside class="panel schedule-panel">
+              <h2>TODAY</h2>
+              <div id="schedule-list" class="custom-scrollbar"></div>
+            </aside>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <section class="panel help">
+          <p><a href="/">PAGE 100 - CHANNEL INDEX</a> | <a href="/guide.html">PAGE 200 - TV GUIDE</a> | <a href="/remote-test.html">PAGE 400 - REMOTE TEST</a></p>
+          <p>ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN</p>
+        </section>
+      </footer>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/remote.js"></script>
+    <script src="/js/dev-guide.js"></script>
+    <script src="/js/player.js"></script>
+  </body>
+</html>

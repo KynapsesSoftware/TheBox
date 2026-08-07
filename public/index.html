@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box - Home</title>
+    <link rel="stylesheet" href="/css/thebox.css" />
+  </head>
+  <body class="layout-fixed">
+    <div class="page-shell">
+      <header class="header">
+        <div class="header-row">
+          <div>
+            <div class="title">THE BOX</div>
+            <div class="subtitle">YOUR RETRO INSPIRED TV PLATFORM</div>
+          </div>
+          <div class="subtitle">PAGE 100</div>
+        </div>
+        <div class="status-bar">
+          <span id="status-text">INITIALISING...</span>
+          <span id="clock-text"></span>
+        </div>
+      </header>
+
+      <main class="screen page-main no-scroll">
+        <section class="panel custom-scrollbar">
+          <h2>CHANNEL LIST</h2>
+          <div id="channel-list"></div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <section class="panel help">
+          <p>PRESS GUIDE FOR SCHEDULES OR SELECT A CHANNEL TO WATCH LIVE.</p>
+          <p><a href="/guide.html">PAGE 200 - TV GUIDE</a> | <a href="/remote-test.html">PAGE 400 - REMOTE TEST</a></p>
+        </section>
+      </footer>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/remote.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/dev-guide.js"></script>
+  </body>
+</html>
