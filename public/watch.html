@@ -12,7 +12,7 @@
         <div class="header-row">
           <div>
             <div class="title" id="channel-name">CHANNEL</div>
-            <div class="subtitle">LIVE BROADCAST SIMULATION</div>
+            <div class="subtitle" id="channel-subtitle">LIVE BROADCAST SIMULATION</div>
           </div>
           <div class="subtitle">PAGE 300</div>
         </div>
@@ -26,8 +26,10 @@
         <section>
           <div class="watch-layout">
             <div class="watch-main">
-              <div class="video-stage">
-                <video id="player" controls autoplay playsinline></video>
+              <div class="video-stage media-stage" id="media-stage">
+                <img id="channel-artwork" class="channel-artwork" alt="" hidden />
+                <video id="video-player" controls autoplay playsinline></video>
+                <audio id="audio-player" autoplay hidden></audio>
                 <div class="now-overlay panel">
                   <h2 id="now-title" class="now-title">NOW SHOWING</h2>
                   <span id="now-times" class="color-green"></span>
@@ -37,7 +39,7 @@
 
             <aside class="panel schedule-panel">
               <h2>TODAY</h2>
-              <div id="schedule-list" class="custom-scrollbar"></div>
+              <div id="schedule-list" class="no-scroll"></div>
             </aside>
           </div>
         </section>
@@ -46,7 +48,7 @@
       <footer class="footer">
         <section class="panel help">
           <p><a href="/">PAGE 100 - CHANNEL INDEX</a> | <a href="/guide.html">PAGE 200 - TV GUIDE</a> | <a href="/remote-test.html">PAGE 400 - REMOTE TEST</a></p>
-          <p>ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN</p>
+          <p id="watch-help">ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN</p>
         </section>
       </footer>
     </div>

@@ -112,10 +112,11 @@ Edit `config.json` in the project root:
   "channelsRoot": "./channels",
   "host": "0.0.0.0",
   "port": 8080,
-  "videoExtensions": [".mp4", ".mkv", ".webm", ".mov"],
+  "videoExtensions": [".mp4", ".mkv", ".webm", ".mov", ".avi"],
+  "audioExtensions": [".mp3", ".flac", ".ogg", ".m4a", ".wav", ".aac"],
   "scanIntervalMinutes": 60,
   "schedule": {
-    "timezone": "Australia/Adelaide",
+    "timezone": "Europe/London",
     "seedBy": "day",
     "hoursToGenerate": 24,
     "defaultStartTime": "00:00",
@@ -135,7 +136,8 @@ Edit `config.json` in the project root:
 | `channelsRoot` | Path to the folder containing channel subfolders |
 | `host` | Network interface to bind (`0.0.0.0` = all interfaces) |
 | `port` | HTTP port (default `8080`) |
-| `videoExtensions` | File types treated as video when scanning channels |
+| `videoExtensions` | File types treated as video when scanning video channels |
+| `audioExtensions` | File types treated as audio when scanning audio channels |
 | `scanIntervalMinutes` | How often to rescan channel folders (`0` = only on startup) |
 | `schedule.timezone` | IANA timezone used for daily schedules (e.g. `Europe/London`, `Australia/Adelaide`) |
 | `schedule.seedBy` | Schedule randomisation period (`day` = new shuffle each calendar day) |
@@ -163,9 +165,9 @@ channels/
 └── cartoons/
 ```
 
-### 2. Add video files
+### 2. Add media files
 
-Copy video files into the channel folder. Supported extensions are defined in `config.json` (default: `.mp4`, `.mkv`, `.webm`, `.mov`).
+Each channel is either a **video** channel (default) or an **audio** channel. Copy media files into the channel folder, or set `sourcePath` in `channel.json` to point at an external folder on another drive or network share. Supported extensions are defined in `config.json`.
 
 ### 3. Optional: `channel.json`
 
@@ -176,6 +178,28 @@ Create `channel.json` inside the channel folder:
   "displayName": "BBC 1",
   "pageNumber": 101,
   "color": "cyan",
+  "sourcePath": "/mnt/media/bbc1",
+  "maxContentDuration": 90,
+  "identInterval": 2,
+  "scanSubfolders": true,
+  "schedule": {
+    "startTime": "06:00",
+    "endTime": "23:00"
+  }
+}
+```
+
+Audio channel example:
+
+```json
+{
+  "displayName": "Music Channel",
+  "pageNumber": 107,
+  "color": "cyan",
+  "mediaType": "audio",
+  "artwork": "artwork.png",
+  "sourcePath": "/mnt/media/music",
+  "scanSubfolders": true,
   "schedule": {
     "startTime": "06:00",
     "endTime": "23:00"
@@ -188,12 +212,42 @@ Create `channel.json` inside the channel folder:
 | Field | Description |
 |---|---|
 | `displayName` | Name shown in the UI |
+| `mediaType` | `video` (default) or `audio`. A channel scans only one media type |
+| `artwork` | Optional artwork filename in the channel folder for audio channels (also checks `artwork.png`, `cover.png`, etc.) |
 | `pageNumber` | Ceefax-style page number in the channel list |
 | `color` | Accent colour in the channel list: `cyan`, `green`, `yellow`, `red`, `blue`, or `magenta` |
+| `sourcePath` | Optional folder containing this channel’s video files. Can be absolute (`/mnt/nas/shows/bbc1`) or relative to the project folder (`../media/bbc1`). A trailing slash is optional. When omitted or empty, videos are read from the channel folder itself |
+| `maxContentDuration` | Optional maximum programme length in **minutes**. Videos longer than this are scanned but excluded from the daily schedule |
+| `identInterval` | Optional ident insertion interval. `0` = no idents (default). `1` = ident after every programme. `2` = ident after every two programmes, and so on. Requires an `ident/` subfolder in the channel directory |
+| `scanSubfolders` | Optional. When `true`, scan video files in all subfolders of the channel folder or `sourcePath`. Default is `false` (top-level files only). The channel’s `ident/` folder is always excluded from programme scans |
 | `schedule.startTime` | When this channel starts broadcasting each day (`HH:MM`, 24-hour) |
 | `schedule.endTime` | When new programmes stop being scheduled (`HH:MM`) |
 
 If `schedule` is omitted, the channel uses `defaultStartTime` and `defaultEndTime` from `config.json`.
+
+### Channel idents
+
+Each channel can include an optional `ident/` subfolder alongside `channel.json`:
+
+```text
+channels/bbc1/
+├── channel.json
+└── ident/
+    ├── bbc1-sting.mp4
+    └── bbc1-logo.mp4
+```
+
+Ident files are always read from the channel folder, even when `sourcePath` points elsewhere for programme content. When `identInterval` is greater than zero and one or more playable idents exist, the scheduler inserts them after every N programmes. If several idents are available, a shuffled order is chosen for the day (stable until the next day’s schedule). Idents play during the broadcast but are not shown in the TV guide or Today schedule lists. Use video idents on video channels and audio idents on audio channels.
+
+### Audio channels
+
+When `mediaType` is `audio`:
+
+- The scanner uses `audioExtensions` from `config.json`
+- Scheduling, idents, and live-join playback work the same as video channels
+- Page 300 shows static artwork in the picture area while audio plays
+- Place artwork in the channel folder (`artwork.png` by default, or set `artwork` in `channel.json`)
+- Full screen expands the artwork area rather than a video element
 
 ### 4. Rescan channels
 

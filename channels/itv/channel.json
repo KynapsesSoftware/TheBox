@@ -1,7 +1,11 @@
 {
     "displayName": "ITV",
+    "mediaType": "video",
     "pageNumber": 103,
     "color": "red",
+    "sourcePath": "",
+    "scanSubfolders": true,
+    "identInterval": 0,
     "schedule": {
       "startTime": "06:00",
       "endTime": "23:00"

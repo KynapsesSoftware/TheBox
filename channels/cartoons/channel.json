@@ -1,7 +1,11 @@
 {
     "displayName": "Cartoons",
+    "mediaType": "video",
     "pageNumber": 104,
     "color": "green",
+    "sourcePath": "",
+    "scanSubfolders": true,
+    "identInterval": 1,
     "schedule": {
       "startTime": "06:00",
       "endTime": "23:00"

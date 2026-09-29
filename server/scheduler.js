@@ -111,13 +111,51 @@ function resolveChannelWindow(channel, options) {
   };
 }
 
-function buildPlaylist(videos, seed) {
-  const playable = videos.filter((video) => video.durationSeconds && video.durationSeconds > 0);
+function buildPlaylist(videos, seed, maxContentDurationMinutes = null) {
+  let playable = videos.filter((video) => video.durationSeconds && video.durationSeconds > 0);
+
+  if (maxContentDurationMinutes) {
+    const maxSeconds = maxContentDurationMinutes * 60;
+    playable = playable.filter((video) => video.durationSeconds <= maxSeconds);
+  }
+
   if (playable.length === 0) {
     return [];
   }
 
   return shuffle(playable, seed);
+}
+
+function buildIdentPlaylist(idents, seed) {
+  const playable = idents.filter((ident) => ident.durationSeconds && ident.durationSeconds > 0);
+  if (playable.length === 0) {
+    return [];
+  }
+
+  return shuffle(playable, seed);
+}
+
+function encodeMediaPath(filename) {
+  return filename.split('/').map((segment) => encodeURIComponent(segment)).join('/');
+}
+
+function createScheduleSlot(channel, item, cursor, isIdent = false) {
+  const durationMs = item.durationSeconds * 1000;
+  const slotEnd = cursor + durationMs;
+  const encodedFile = encodeMediaPath(item.filename);
+  const mediaUrl = isIdent
+    ? `/media/${encodeURIComponent(channel.id)}/ident/${encodedFile}`
+    : `/media/${encodeURIComponent(channel.id)}/${encodedFile}`;
+
+  return {
+    title: item.title,
+    filename: item.filename,
+    startsAt: new Date(cursor).toISOString(),
+    endsAt: new Date(slotEnd).toISOString(),
+    durationSeconds: item.durationSeconds,
+    mediaUrl,
+    isIdent,
+  };
 }
 
 function generateChannelSchedule(channel, options) {
@@ -130,7 +168,11 @@ function generateChannelSchedule(channel, options) {
     endTime,
   } = resolveChannelWindow(channel, options);
   const seed = hashSeed(`${channel.id}:${dateKey}`);
-  const playlist = buildPlaylist(channel.videos, seed);
+  const playlist = buildPlaylist(channel.videos, seed, channel.maxContentDuration);
+  const identInterval = channel.identInterval || 0;
+  const identPlaylist = identInterval > 0
+    ? buildIdentPlaylist(channel.idents || [], hashSeed(`${channel.id}:idents:${dateKey}`))
+    : [];
   const slots = [];
 
   if (playlist.length === 0) {
@@ -145,23 +187,32 @@ function generateChannelSchedule(channel, options) {
 
   let cursor = windowStartMs;
   let index = 0;
+  let identIndex = 0;
+  let videosSinceIdent = 0;
 
   while (cursor < windowEndMs) {
     const video = playlist[index % playlist.length];
-    const durationMs = video.durationSeconds * 1000;
-    const slotEnd = cursor + durationMs;
+    const videoSlot = createScheduleSlot(channel, video, cursor, false);
 
-    slots.push({
-      title: video.title,
-      filename: video.filename,
-      startsAt: new Date(cursor).toISOString(),
-      endsAt: new Date(slotEnd).toISOString(),
-      durationSeconds: video.durationSeconds,
-      mediaUrl: `/media/${encodeURIComponent(channel.id)}/${encodeURIComponent(video.filename)}`,
-    });
-
-    cursor = slotEnd;
+    slots.push(videoSlot);
+    cursor = Date.parse(videoSlot.endsAt);
     index += 1;
+    videosSinceIdent += 1;
+
+    if (
+      identInterval > 0
+      && identPlaylist.length > 0
+      && videosSinceIdent >= identInterval
+      && cursor < windowEndMs
+    ) {
+      const ident = identPlaylist[identIndex % identPlaylist.length];
+      const identSlot = createScheduleSlot(channel, ident, cursor, true);
+
+      slots.push(identSlot);
+      cursor = Date.parse(identSlot.endsAt);
+      identIndex += 1;
+      videosSinceIdent = 0;
+    }
 
     if (index > playlist.length * 200) {
       break;

@@ -5,7 +5,8 @@ const DEFAULT_CONFIG = {
   channelsRoot: './channels',
   host: '0.0.0.0',
   port: 8080,
-  videoExtensions: ['.mp4', '.mkv', '.webm', '.mov'],
+  videoExtensions: ['.mp4', '.mkv', '.webm', '.mov', '.avi'],
+  audioExtensions: ['.mp3', '.flac', '.ogg', '.m4a', '.wav', '.aac'],
   scanIntervalMinutes: 60,
   schedule: {
     timezone: 'Europe/London',

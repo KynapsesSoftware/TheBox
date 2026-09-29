@@ -1,7 +1,12 @@
 const params = new URLSearchParams(window.location.search);
 const channelId = params.get('channel');
 
-const player = document.getElementById('player');
+const mediaStage = document.getElementById('media-stage');
+const channelArtwork = document.getElementById('channel-artwork');
+const videoPlayer = document.getElementById('video-player');
+const audioPlayer = document.getElementById('audio-player');
+const channelSubtitle = document.getElementById('channel-subtitle');
+const watchHelp = document.getElementById('watch-help');
 const nowTitle = document.getElementById('now-title');
 const nowTimes = document.getElementById('now-times');
 const channelName = document.getElementById('channel-name');
@@ -9,6 +14,7 @@ const statusText = document.getElementById('status-text');
 const clockText = document.getElementById('clock-text');
 const scheduleList = document.getElementById('schedule-list');
 
+let channelConfig = null;
 let currentMediaUrl = null;
 let currentStartsAt = null;
 let lastScrolledStartsAt = null;
@@ -19,8 +25,41 @@ if (channelId) {
   sessionStorage.setItem('thebox:lastChannel', channelId);
 }
 
+function isAudioChannel() {
+  return channelConfig?.mediaType === 'audio';
+}
+
+function getPlayer() {
+  return isAudioChannel() ? audioPlayer : videoPlayer;
+}
+
 function updateClock() {
   clockText.textContent = new Date().toLocaleString();
+}
+
+function applyChannelMode() {
+  const audio = isAudioChannel();
+
+  mediaStage.classList.toggle('audio-mode', audio);
+  videoPlayer.hidden = audio;
+  audioPlayer.hidden = !audio;
+
+  if (audio) {
+    channelSubtitle.textContent = 'LIVE AUDIO BROADCAST';
+    watchHelp.textContent = 'ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN';
+
+    if (channelConfig?.artworkUrl) {
+      channelArtwork.src = channelConfig.artworkUrl;
+      channelArtwork.hidden = false;
+    } else {
+      channelArtwork.removeAttribute('src');
+      channelArtwork.hidden = true;
+    }
+  } else {
+    channelSubtitle.textContent = 'LIVE BROADCAST SIMULATION';
+    watchHelp.textContent = 'ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN';
+    channelArtwork.hidden = true;
+  }
 }
 
 function scrollScheduleToNowPlaying() {
@@ -64,21 +103,23 @@ function focusScheduleRow(index) {
   row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
-function isVideoFullscreen() {
-  return document.fullscreenElement === player;
+function isWatchFullscreen() {
+  const fullscreenElement = document.fullscreenElement;
+  return fullscreenElement === mediaStage || fullscreenElement === videoPlayer;
 }
 
-async function toggleVideoFullscreen() {
+async function toggleWatchFullscreen() {
   try {
-    if (isVideoFullscreen()) {
+    if (isWatchFullscreen()) {
       await document.exitFullscreen();
       return;
     }
 
-    if (player.requestFullscreen) {
-      await player.requestFullscreen();
-    } else if (player.webkitRequestFullscreen) {
-      await player.webkitRequestFullscreen();
+    const target = isAudioChannel() ? mediaStage : videoPlayer;
+    if (target.requestFullscreen) {
+      await target.requestFullscreen();
+    } else if (target.webkitRequestFullscreen) {
+      await target.webkitRequestFullscreen();
     }
   } catch {
     // Fullscreen may be blocked until the user interacts with the page.
@@ -86,7 +127,7 @@ async function toggleVideoFullscreen() {
 }
 
 function updateWatchStatus() {
-  if (isVideoFullscreen()) {
+  if (isWatchFullscreen()) {
     statusText.textContent = 'FULL SCREEN';
   } else if (statusText.textContent === 'FULL SCREEN') {
     statusText.textContent = 'ON AIR';
@@ -108,10 +149,12 @@ TheBox.remote.register('watch', {
   },
 
   onAction(action) {
+    const player = getPlayer();
+
     switch (action) {
       case 'enter':
       case 'fullscreen':
-        toggleVideoFullscreen();
+        toggleWatchFullscreen();
         return true;
       case 'up':
         focusScheduleRow(scheduleFocusIndex - 1);
@@ -167,6 +210,7 @@ async function loadNowPlaying(advanceFromEnded = false) {
     ]);
 
     let now = nowPlaying;
+    const player = getPlayer();
 
     if (advanceFromEnded && currentStartsAt && now.startsAt === currentStartsAt) {
       const currentIndex = schedule.slots.findIndex((slot) => slot.startsAt === currentStartsAt);
@@ -175,6 +219,7 @@ async function loadNowPlaying(advanceFromEnded = false) {
         now = {
           channelId: now.channelId,
           channelName: now.channelName,
+          mediaType: now.mediaType,
           ...next,
           offsetSeconds: 0,
         };
@@ -200,11 +245,13 @@ async function loadNowPlaying(advanceFromEnded = false) {
       await player.play().catch(() => {});
     }
 
+    const programmeSlots = schedule.slots.filter((slot) => !slot.isIdent);
+
     scheduleList.innerHTML = '';
-    schedule.slots.forEach((slot) => {
+    programmeSlots.forEach((slot) => {
       const row = document.createElement('div');
       row.className = 'row';
-      if (slot.startsAt === now.startsAt) {
+      if (!now.isIdent && slot.startsAt === now.startsAt) {
         row.classList.add('now-playing');
       }
       row.innerHTML = `
@@ -215,7 +262,7 @@ async function loadNowPlaying(advanceFromEnded = false) {
       scheduleList.appendChild(row);
     });
 
-    const nowIndex = schedule.slots.findIndex((slot) => slot.startsAt === now.startsAt);
+    const nowIndex = programmeSlots.findIndex((slot) => slot.startsAt === now.startsAt);
     if (nowIndex >= 0) {
       scheduleFocusIndex = nowIndex;
     }
@@ -237,12 +284,41 @@ async function loadNowPlaying(advanceFromEnded = false) {
   }
 }
 
-player.addEventListener('ended', () => {
-  loadNowPlaying(true);
+async function initWatchPage() {
+  if (!channelId) {
+    statusText.textContent = 'NO CHANNEL SELECTED';
+    return;
+  }
+
+  try {
+    channelConfig = await TheBox.apiGet(`/api/channels/${encodeURIComponent(channelId)}`);
+    applyChannelMode();
+    await loadNowPlaying();
+  } catch (error) {
+    statusText.textContent = 'ERROR';
+    nowTitle.textContent = error.message;
+  }
+}
+
+function bindPlayerEvents(player) {
+  player.addEventListener('ended', () => {
+    loadNowPlaying(true);
+  });
+}
+
+bindPlayerEvents(videoPlayer);
+bindPlayerEvents(audioPlayer);
+
+videoPlayer.addEventListener('click', () => {
+  if (!isAudioChannel()) {
+    toggleWatchFullscreen();
+  }
 });
 
-player.addEventListener('click', () => {
-  toggleVideoFullscreen();
+mediaStage.addEventListener('click', (event) => {
+  if (isAudioChannel() && event.target !== audioPlayer) {
+    toggleWatchFullscreen();
+  }
 });
 
 document.addEventListener('fullscreenchange', updateWatchStatus);
@@ -250,4 +326,4 @@ document.addEventListener('fullscreenchange', updateWatchStatus);
 updateClock();
 setInterval(updateClock, 1000);
 setInterval(loadNowPlaying, 30000);
-loadNowPlaying();
+initWatchPage();

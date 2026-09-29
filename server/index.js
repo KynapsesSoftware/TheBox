@@ -6,6 +6,7 @@ const { generateChannelSchedule, generateGuide, findCurrentSlot, getDateKey } = 
 const { createMediaHandler } = require('./stream');
 
 const config = loadConfig();
+const projectRoot = path.dirname(config.configPath);
 const channelsRoot = resolveChannelsRoot(config);
 const publicDir = path.join(__dirname, '..', 'public');
 
@@ -23,8 +24,15 @@ function serializeChannel(channel) {
     displayName: channel.displayName,
     pageNumber: channel.pageNumber,
     color: channel.color,
+    mediaType: channel.mediaType || 'video',
+    artworkUrl: channel.artworkPath ? `/api/channels/${encodeURIComponent(channel.id)}/artwork` : null,
+    sourcePath: channel.sourcePath || null,
+    maxContentDuration: channel.maxContentDuration ?? null,
+    identInterval: channel.identInterval ?? 0,
+    scanSubfolders: channel.scanSubfolders ?? false,
     schedule: channel.schedule,
     videoCount: channel.videos.length,
+    identCount: channel.idents.length,
     totalDurationSeconds: channel.videos.reduce(
       (sum, video) => sum + (video.durationSeconds || 0),
       0,
@@ -42,22 +50,25 @@ function scheduleOptions(date = new Date()) {
   };
 }
 
-function countUnplayableVideos(channelList) {
+function countUnplayableMedia(channelList) {
   return channelList.reduce((count, channel) => {
     return count + channel.videos.filter((video) => !video.durationSeconds).length;
   }, 0);
 }
 
 async function refreshChannels() {
-  channels = await scanChannels(channelsRoot, config.videoExtensions);
-  const videoCount = channels.reduce((sum, channel) => sum + channel.videos.length, 0);
-  const unplayableCount = countUnplayableVideos(channels);
+  channels = await scanChannels(channelsRoot, {
+    videoExtensions: config.videoExtensions,
+    audioExtensions: config.audioExtensions,
+  }, projectRoot);
+  const mediaCount = channels.reduce((sum, channel) => sum + channel.videos.length, 0);
+  const unplayableCount = countUnplayableMedia(channels);
 
-  console.log(`Scanned ${channels.length} channel(s), ${videoCount} video(s) from ${channelsRoot}`);
+  console.log(`Scanned ${channels.length} channel(s), ${mediaCount} programme(s) from ${channelsRoot}`);
 
   if (unplayableCount > 0) {
     console.warn(
-      `${unplayableCount} video(s) have no duration and will be excluded from schedules.`,
+      `${unplayableCount} programme(s) have no duration and will be excluded from schedules.`,
     );
   }
 }
@@ -122,13 +133,17 @@ app.get('/api/channels/:id/now', (req, res) => {
     const unplayableCount = channel.videos.filter((video) => !video.durationSeconds).length;
 
     if (channel.videos.length === 0) {
-      res.status(404).json({ error: 'This channel has no video files' });
+      res.status(404).json({
+        error: channel.mediaType === 'audio'
+          ? 'This channel has no audio files'
+          : 'This channel has no video files',
+      });
       return;
     }
 
     if (unplayableCount === channel.videos.length) {
       res.status(503).json({
-        error: 'Video durations could not be read. Restart the server after checking ffprobe.',
+        error: 'Media durations could not be read. Restart the server after checking ffprobe.',
       });
       return;
     }
@@ -140,8 +155,19 @@ app.get('/api/channels/:id/now', (req, res) => {
   res.json({
     channelId: channel.id,
     channelName: channel.displayName,
+    mediaType: channel.mediaType || 'video',
     ...current,
   });
+});
+
+app.get('/api/channels/:id/artwork', (req, res) => {
+  const channel = getChannelById(req.params.id);
+  if (!channel?.artworkPath) {
+    res.status(404).json({ error: 'Artwork not found' });
+    return;
+  }
+
+  res.sendFile(channel.artworkPath);
 });
 
 app.get('/api/guide', (req, res) => {
@@ -160,7 +186,8 @@ app.post('/api/admin/rescan', async (_req, res) => {
   res.json({ ok: true, channels: channels.length });
 });
 
-app.get('/media/:channelId/:filename', createMediaHandler(getChannelById));
+app.get('/media/:channelId/ident/*', createMediaHandler(getChannelById, 'ident'));
+app.get('/media/:channelId/*', createMediaHandler(getChannelById));
 
 app.get('*', (_req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
@@ -173,9 +200,20 @@ async function start() {
     scanTimer = setInterval(refreshChannels, config.scanIntervalMinutes * 60 * 1000);
   }
 
-  app.listen(config.port, config.host, () => {
+  const server = app.listen(config.port, config.host, () => {
     console.log(`${config.ui.title} running at http://localhost:${config.port}`);
     console.log(`Channels root: ${channelsRoot}`);
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(
+        `Port ${config.port} is already in use. Stop the other process or change "port" in config.json.`,
+      );
+    } else {
+      console.error('Failed to start The Box:', error.message);
+    }
+    process.exit(1);
   });
 }
 

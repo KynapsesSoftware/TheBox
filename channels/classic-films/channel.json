@@ -1,7 +1,11 @@
 {
   "displayName": "Classic Films",
+  "mediaType": "video",
   "pageNumber": 105,
   "color": "cyan",
+  "sourcePath": "",
+  "scanSubfolders": true,
+  "identInterval": 0,
   "schedule": {
     "startTime": "06:00",
     "endTime": "23:00"

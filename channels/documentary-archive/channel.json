@@ -1,7 +1,11 @@
 {
   "displayName": "Documentary Archive",
+  "mediaType": "video",
   "pageNumber": 106,
   "color": "green",
+  "sourcePath": "",
+  "scanSubfolders": true,
+  "identInterval": 0,
   "schedule": {
     "startTime": "06:00",
     "endTime": "23:00"

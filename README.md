@@ -43,7 +43,8 @@ Edit `config.json`:
   "channelsRoot": "./channels",
   "host": "0.0.0.0",
   "port": 8080,
-  "videoExtensions": [".mp4", ".mkv", ".webm", ".mov"],
+  "videoExtensions": [".mp4", ".mkv", ".webm", ".mov", ".avi"],
+  "audioExtensions": [".mp3", ".flac", ".ogg", ".m4a", ".wav", ".aac"],
   "scanIntervalMinutes": 60,
   "schedule": {
     "timezone": "Europe/London",
@@ -58,7 +59,7 @@ Edit `config.json`:
 ## Adding channels
 
 1. Create a folder under `channels/`, for example `channels/classic-films/`
-2. Add video files to that folder
+2. Add video files to that folder, or set `sourcePath` in `channel.json` to an external folder
 3. Optionally add `channel.json`:
 
 ```json
@@ -66,12 +67,22 @@ Edit `config.json`:
   "displayName": "Classic Films",
   "pageNumber": 101,
   "color": "cyan",
+  "sourcePath": "/mnt/media/classic-films",
+  "maxContentDuration": 120,
+  "identInterval": 1,
+  "scanSubfolders": true,
   "schedule": {
     "startTime": "06:00",
     "endTime": "17:00"
   }
 }
 ```
+
+`sourcePath` is optional. Use an absolute path or a path relative to the project folder when videos live outside `channels/`. A trailing slash is optional.
+
+Set `scanSubfolders` to `true` to include videos from subfolders when scanning a channel or `sourcePath`.
+
+Set `mediaType` to `audio` for audio-only channels. Add artwork (e.g. `artwork.png`) to the channel folder for the watch page display.
 
 `schedule.startTime` and `schedule.endTime` use 24-hour `HH:MM` format in the timezone from `config.json`. New programmes are not started after `endTime`, but the final programme may continue past it. Omit `schedule` to use the global defaults.
 

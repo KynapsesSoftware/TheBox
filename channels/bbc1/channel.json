@@ -1,7 +1,11 @@
 {
     "displayName": "BBC 1",
+    "mediaType": "video",
     "pageNumber": 101,
     "color": "cyan",
+    "sourcePath": "",
+    "scanSubfolders": true,
+    "identInterval": 0,
     "schedule": {
       "startTime": "06:00",
       "endTime": "23:00"

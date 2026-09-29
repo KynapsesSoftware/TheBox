@@ -86,7 +86,7 @@ async function renderGuide() {
       channelLink.textContent = channelSchedule.channelId.toUpperCase();
       guideGrid.appendChild(channelLink);
 
-      const upcoming = channelSchedule.slots.slice(0, 4);
+      const upcoming = channelSchedule.slots.filter((slot) => !slot.isIdent).slice(0, 4);
       for (let i = 0; i < 4; i += 1) {
         const cell = document.createElement('div');
         cell.className = 'guide-cell';

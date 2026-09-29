@@ -53,23 +53,24 @@ async function renderChannels() {
     statusText.textContent = `${channels.length} CHANNEL(S) AVAILABLE`;
 
     if (channels.length === 0) {
-      channelList.innerHTML = '<p class="help">Add video files to folders under <span class="color-yellow">channels/</span>, then rescan.</p>';
+      channelList.innerHTML = '<p class="help">Add media files to folders under <span class="color-yellow">channels/</span>, then rescan.</p>';
       TheBox.remote.mountPage('index');
       return;
     }
 
     const header = document.createElement('div');
-    header.className = 'row header-row-grid';
-    header.innerHTML = '<span>PAGE</span><span>CHANNEL</span><span>VIDEOS</span>';
+    header.className = 'row header-row-grid channel-list-row';
+    header.innerHTML = '<span>PAGE</span><span>CHANNEL</span><span>TYPE</span><span>ITEMS</span>';
     channelList.appendChild(header);
 
     channels.forEach((channel) => {
       const row = document.createElement('a');
-      row.className = 'row clickable';
+      row.className = 'row clickable channel-list-row';
       row.href = `watch.html?channel=${encodeURIComponent(channel.id)}`;
       row.innerHTML = `
         <span class="color-${channel.color}">${channel.pageNumber ?? '---'}</span>
         <span>${channel.displayName}</span>
+        <span>${channel.mediaType === 'audio' ? 'AUDIO' : 'VIDEO'}</span>
         <span>${channel.videoCount}</span>
       `;
       channelList.appendChild(row);
