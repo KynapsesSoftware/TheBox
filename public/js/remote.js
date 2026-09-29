@@ -43,6 +43,7 @@ TheBox.remote = {
     volumeDown: ['AudioVolumeDown', 'VolumeDown'],
     volumeMute: ['AudioVolumeMute', 'VolumeMute'],
     fullscreen: ['MediaFullscreen', 'F11', 'KeyF'],
+    contextMenu: ['ContextMenu'],
   },
 
   register(name, handler) {
@@ -71,6 +72,10 @@ TheBox.remote = {
 
   matchAction(event) {
     const { code, key } = event;
+
+    if (event.keyCode === 93) {
+      return 'contextMenu';
+    }
 
     for (const [action, codes] of Object.entries(this.keys)) {
       if (codes.includes(code) || codes.includes(key)) {

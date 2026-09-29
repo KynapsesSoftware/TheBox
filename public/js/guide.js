@@ -1,4 +1,5 @@
-const guideGrid = document.getElementById('guide-grid');
+const guideHeader = document.getElementById('guide-header');
+const guideBody = document.getElementById('guide-body');
 const statusText = document.getElementById('status-text');
 const clockText = document.getElementById('clock-text');
 const dateText = document.getElementById('date-text');
@@ -7,21 +8,40 @@ function updateClock() {
   clockText.textContent = new Date().toLocaleString();
 }
 
-function buildTimeHeaders() {
-  const now = new Date();
-  const headers = [];
-  for (let i = 0; i < 4; i += 1) {
-    const slot = new Date(now.getTime() + (i * 60 * 60 * 1000));
-    slot.setMinutes(0, 0, 0);
-    headers.push(TheBox.formatClock(slot));
+const GUIDE_HEADERS = ['ON NOW', 'NEXT', 'THEN', 'LATER'];
+const GUIDE_REFRESH_MS = 60_000;
+
+function findUpcomingStartIndex(slots, now = new Date()) {
+  const nowMs = now.getTime();
+
+  for (let i = 0; i < slots.length; i += 1) {
+    const startMs = Date.parse(slots[i].startsAt);
+    const endMs = Date.parse(slots[i].endsAt);
+    if (nowMs >= startMs && nowMs < endMs) {
+      return i;
+    }
   }
-  return headers;
+
+  for (let i = 0; i < slots.length; i += 1) {
+    if (Date.parse(slots[i].startsAt) > nowMs) {
+      return i;
+    }
+  }
+
+  return slots.length;
+}
+
+function isSlotOnNow(slot, now = new Date()) {
+  const nowMs = now.getTime();
+  const startMs = Date.parse(slot.startsAt);
+  const endMs = Date.parse(slot.endsAt);
+  return nowMs >= startMs && nowMs < endMs;
 }
 
 TheBox.remote.register('guide', {
   onMount() {
     TheBox.remote.focusList = TheBox.remote.createFocusList(
-      guideGrid,
+      guideBody,
       'a.guide-cell.channel-name',
     );
     TheBox.remote.focusList?.focus(0);
@@ -56,24 +76,27 @@ TheBox.remote.register('guide', {
 });
 
 async function renderGuide() {
+  const previousFocusIndex = TheBox.remote.focusList?.index ?? 0;
   statusText.textContent = 'BUILDING GUIDE...';
-  guideGrid.innerHTML = '';
+  guideHeader.innerHTML = '';
+  guideBody.innerHTML = '';
 
   try {
     const guide = await TheBox.apiGet('/api/guide');
+    const now = new Date();
+
     if (dateText) {
       dateText.textContent = guide.date;
     }
     statusText.textContent = 'NOW SHOWING';
 
-    const headers = buildTimeHeaders();
-    guideGrid.appendChild(Object.assign(document.createElement('div'), {
+    guideHeader.appendChild(Object.assign(document.createElement('div'), {
       className: 'guide-cell channel-name',
       textContent: 'CHANNEL',
     }));
 
-    headers.forEach((header) => {
-      guideGrid.appendChild(Object.assign(document.createElement('div'), {
+    GUIDE_HEADERS.forEach((header) => {
+      guideHeader.appendChild(Object.assign(document.createElement('div'), {
         className: 'guide-cell time-header',
         textContent: header,
       }));
@@ -84,28 +107,36 @@ async function renderGuide() {
       channelLink.className = 'guide-cell channel-name';
       channelLink.href = `watch.html?channel=${encodeURIComponent(channelSchedule.channelId)}`;
       channelLink.textContent = channelSchedule.channelId.toUpperCase();
-      guideGrid.appendChild(channelLink);
+      guideBody.appendChild(channelLink);
 
-      const upcoming = channelSchedule.slots.filter((slot) => !slot.isIdent).slice(0, 4);
+      const programmeSlots = channelSchedule.slots.filter((slot) => !slot.isIdent);
+      const startIndex = findUpcomingStartIndex(programmeSlots, now);
+      const upcoming = programmeSlots.slice(startIndex, startIndex + 4);
+
       for (let i = 0; i < 4; i += 1) {
         const cell = document.createElement('div');
         cell.className = 'guide-cell';
         if (upcoming[i]) {
-          cell.innerHTML = `<div>${TheBox.formatClock(upcoming[i].startsAt)}</div><div>${upcoming[i].title}</div>`;
+          if (i === 0 && isSlotOnNow(upcoming[i], now)) {
+            cell.classList.add('on-now');
+          }
+          cell.innerHTML = `<div class="guide-time">${TheBox.formatClock(upcoming[i].startsAt)}</div><div class="guide-title">${upcoming[i].title}</div>`;
         } else {
           cell.textContent = '---';
         }
-        guideGrid.appendChild(cell);
+        guideBody.appendChild(cell);
       }
     });
 
     TheBox.remote.mountPage('guide');
+    TheBox.remote.focusList?.focus(previousFocusIndex);
   } catch (error) {
     statusText.textContent = 'ERROR';
-    guideGrid.innerHTML = `<p class="error">${error.message}</p>`;
+    guideBody.innerHTML = `<p class="error">${error.message}</p>`;
   }
 }
 
 updateClock();
 setInterval(updateClock, 1000);
 renderGuide();
+setInterval(renderGuide, GUIDE_REFRESH_MS);

@@ -396,17 +396,85 @@ a.guide-cell.channel-name.remote-focus * {
   opacity: 1;
 }
 
+.channel-list-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.channel-list-fixed {
+  flex-shrink: 0;
+}
+
+.channel-list-panel h2 {
+  margin-bottom: 0.75rem;
+}
+
+.channel-list-header {
+  flex-shrink: 0;
+}
+
+.channel-list-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 0.25rem;
+  scroll-padding-block: 0.25rem;
+}
+
+.channel-list-body::-webkit-scrollbar {
+  display: none;
+}
+
+.guide-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 0.25rem;
+}
+
 .guide-grid {
   display: grid;
   grid-template-columns: 8rem repeat(4, 1fr);
   gap: 0.25rem;
 }
 
+.guide-header {
+  flex-shrink: 0;
+}
+
+.guide-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  grid-auto-rows: minmax(min-content, auto);
+  align-content: start;
+  padding-bottom: 0.25rem;
+  scroll-padding-block: 0.25rem;
+}
+
+.guide-body::-webkit-scrollbar {
+  display: none;
+}
+
 .guide-cell {
   border: 1px solid var(--cyan);
-  min-height: 3rem;
-  padding: 0.25rem 0.5rem;
-  overflow: hidden;
+  min-height: calc(2 * var(--row-height) + 0.5rem);
+  padding: 0.35rem 0.5rem;
+  line-height: var(--row-height);
+  overflow: visible;
+  word-break: break-word;
+}
+
+.guide-header .guide-cell {
+  min-height: var(--row-height);
+  padding: 0.35rem 0.5rem;
 }
 
 .guide-cell.channel-name {
@@ -428,6 +496,19 @@ a.guide-cell.channel-name:focus * {
 .guide-cell.time-header {
   color: var(--green);
   text-align: center;
+}
+
+.guide-cell.on-now {
+  background: var(--blue);
+  color: var(--fg);
+}
+
+.guide-time {
+  color: var(--cyan);
+}
+
+.guide-cell.on-now .guide-time {
+  color: var(--fg);
 }
 
 .help {
@@ -519,6 +600,14 @@ a.guide-cell.channel-name:focus * {
   border-top: 2px solid var(--cyan);
   background: rgba(0, 0, 0, 0.88);
   padding: 0.5rem 0.75rem;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.media-stage:fullscreen .now-overlay.fullscreen-hidden,
+.media-stage:-webkit-full-screen .now-overlay.fullscreen-hidden {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .now-overlay .now-title {

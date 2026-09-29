@@ -2,6 +2,7 @@ const params = new URLSearchParams(window.location.search);
 const channelId = params.get('channel');
 
 const mediaStage = document.getElementById('media-stage');
+const nowOverlay = document.getElementById('now-overlay');
 const channelArtwork = document.getElementById('channel-artwork');
 const videoPlayer = document.getElementById('video-player');
 const audioPlayer = document.getElementById('audio-player');
@@ -20,6 +21,9 @@ let currentStartsAt = null;
 let lastScrolledStartsAt = null;
 let scheduleFocusIndex = 0;
 let watchRemoteMounted = false;
+let fullscreenOverlayTimer = null;
+
+const FULLSCREEN_OVERLAY_MS = 5000;
 
 if (channelId) {
   sessionStorage.setItem('thebox:lastChannel', channelId);
@@ -46,7 +50,7 @@ function applyChannelMode() {
 
   if (audio) {
     channelSubtitle.textContent = 'LIVE AUDIO BROADCAST';
-    watchHelp.textContent = 'ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN';
+    watchHelp.textContent = 'ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN | MENU = NOW SHOWING';
 
     if (channelConfig?.artworkUrl) {
       channelArtwork.src = channelConfig.artworkUrl;
@@ -57,7 +61,7 @@ function applyChannelMode() {
     }
   } else {
     channelSubtitle.textContent = 'LIVE BROADCAST SIMULATION';
-    watchHelp.textContent = 'ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN';
+    watchHelp.textContent = 'ENTER = FULL SCREEN | BACK = EXIT FULL SCREEN | MENU = NOW SHOWING';
     channelArtwork.hidden = true;
   }
 }
@@ -104,8 +108,53 @@ function focusScheduleRow(index) {
 }
 
 function isWatchFullscreen() {
-  const fullscreenElement = document.fullscreenElement;
-  return fullscreenElement === mediaStage || fullscreenElement === videoPlayer;
+  return document.fullscreenElement === mediaStage;
+}
+
+function clearFullscreenOverlayTimer() {
+  if (fullscreenOverlayTimer) {
+    clearTimeout(fullscreenOverlayTimer);
+    fullscreenOverlayTimer = null;
+  }
+}
+
+function hideFullscreenNowOverlay() {
+  if (!isWatchFullscreen()) {
+    return;
+  }
+
+  nowOverlay?.classList.add('fullscreen-hidden');
+  clearFullscreenOverlayTimer();
+}
+
+function showFullscreenNowOverlay(autoHide = true) {
+  if (!isWatchFullscreen()) {
+    return;
+  }
+
+  nowOverlay?.classList.remove('fullscreen-hidden');
+  clearFullscreenOverlayTimer();
+
+  if (autoHide) {
+    fullscreenOverlayTimer = setTimeout(hideFullscreenNowOverlay, FULLSCREEN_OVERLAY_MS);
+  }
+}
+
+function toggleFullscreenNowOverlay() {
+  if (!isWatchFullscreen()) {
+    return;
+  }
+
+  if (nowOverlay?.classList.contains('fullscreen-hidden')) {
+    showFullscreenNowOverlay(true);
+  } else {
+    hideFullscreenNowOverlay();
+  }
+}
+
+function resetNowOverlayForWindowedView() {
+  clearFullscreenOverlayTimer();
+  nowOverlay?.classList.remove('fullscreen-hidden');
 }
 
 async function toggleWatchFullscreen() {
@@ -115,11 +164,10 @@ async function toggleWatchFullscreen() {
       return;
     }
 
-    const target = isAudioChannel() ? mediaStage : videoPlayer;
-    if (target.requestFullscreen) {
-      await target.requestFullscreen();
-    } else if (target.webkitRequestFullscreen) {
-      await target.webkitRequestFullscreen();
+    if (mediaStage.requestFullscreen) {
+      await mediaStage.requestFullscreen();
+    } else if (mediaStage.webkitRequestFullscreen) {
+      await mediaStage.webkitRequestFullscreen();
     }
   } catch {
     // Fullscreen may be blocked until the user interacts with the page.
@@ -129,8 +177,12 @@ async function toggleWatchFullscreen() {
 function updateWatchStatus() {
   if (isWatchFullscreen()) {
     statusText.textContent = 'FULL SCREEN';
-  } else if (statusText.textContent === 'FULL SCREEN') {
-    statusText.textContent = 'ON AIR';
+    showFullscreenNowOverlay(true);
+  } else {
+    resetNowOverlayForWindowedView();
+    if (statusText.textContent === 'FULL SCREEN') {
+      statusText.textContent = 'ON AIR';
+    }
   }
 }
 
@@ -191,6 +243,12 @@ TheBox.remote.register('watch', {
       case 'right':
         TheBox.remote.goToPageNumber(200);
         return true;
+      case 'contextMenu':
+        if (isWatchFullscreen()) {
+          toggleFullscreenNowOverlay();
+          return true;
+        }
+        return false;
       default:
         return false;
     }

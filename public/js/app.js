@@ -1,7 +1,8 @@
 // Design / developer guide — set to true to show the layout overlay
 TheBox.devGuideEnabled = false;
 
-const channelList = document.getElementById('channel-list');
+const channelListHeader = document.getElementById('channel-list-header');
+const channelListBody = document.getElementById('channel-list-body');
 const statusText = document.getElementById('status-text');
 const clockText = document.getElementById('clock-text');
 
@@ -11,8 +12,10 @@ function updateClock() {
 
 TheBox.remote.register('index', {
   onMount() {
-    const container = document.getElementById('channel-list');
-    TheBox.remote.focusList = TheBox.remote.createFocusList(container, 'a.row.clickable');
+    TheBox.remote.focusList = TheBox.remote.createFocusList(
+      channelListBody,
+      'a.row.clickable',
+    );
     TheBox.remote.focusList?.focus(0);
   },
 
@@ -45,15 +48,17 @@ TheBox.remote.register('index', {
 });
 
 async function renderChannels() {
+  const previousFocusIndex = TheBox.remote.focusList?.index ?? 0;
   statusText.textContent = 'LOADING CHANNELS...';
-  channelList.innerHTML = '';
+  channelListHeader.innerHTML = '';
+  channelListBody.innerHTML = '';
 
   try {
     const channels = await TheBox.apiGet('/api/channels');
     statusText.textContent = `${channels.length} CHANNEL(S) AVAILABLE`;
 
     if (channels.length === 0) {
-      channelList.innerHTML = '<p class="help">Add media files to folders under <span class="color-yellow">channels/</span>, then rescan.</p>';
+      channelListBody.innerHTML = '<p class="help">Add media files to folders under <span class="color-yellow">channels/</span>, then rescan.</p>';
       TheBox.remote.mountPage('index');
       return;
     }
@@ -61,7 +66,7 @@ async function renderChannels() {
     const header = document.createElement('div');
     header.className = 'row header-row-grid channel-list-row';
     header.innerHTML = '<span>PAGE</span><span>CHANNEL</span><span>TYPE</span><span>ITEMS</span>';
-    channelList.appendChild(header);
+    channelListHeader.appendChild(header);
 
     channels.forEach((channel) => {
       const row = document.createElement('a');
@@ -73,13 +78,14 @@ async function renderChannels() {
         <span>${channel.mediaType === 'audio' ? 'AUDIO' : 'VIDEO'}</span>
         <span>${channel.videoCount}</span>
       `;
-      channelList.appendChild(row);
+      channelListBody.appendChild(row);
     });
 
     TheBox.remote.mountPage('index');
+    TheBox.remote.focusList?.focus(previousFocusIndex);
   } catch (error) {
     statusText.textContent = 'ERROR';
-    channelList.innerHTML = `<p class="error">${error.message}</p>`;
+    channelListBody.innerHTML = `<p class="error">${error.message}</p>`;
   }
 }
 
