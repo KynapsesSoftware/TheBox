@@ -4,6 +4,8 @@ The Box is a retro inspired local channel media player with a BBC Ceefax-style i
 
 For installation, configuration, remote control, troubleshooting, and more, see the **[User Guide](userguide.md)**.
 
+![The Box - Screenshot 1](docs/images/thebox-screenshot-1.png)
+
 ## Requirements
 
 - Node.js 18 or newer

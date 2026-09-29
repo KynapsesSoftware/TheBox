@@ -4,6 +4,8 @@
 
 This guide covers installation, configuration, channel setup, scheduling, the on-screen interface, remote control, developer tools, and troubleshooting.
 
+![The Box - Screenshot 1](docs/images/thebox-screenshot-1.png)
+
 ---
 
 ## Table of contents
