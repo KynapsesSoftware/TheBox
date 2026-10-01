@@ -109,7 +109,9 @@ async function renderGuide() {
       channelLink.textContent = channelSchedule.channelId.toUpperCase();
       guideBody.appendChild(channelLink);
 
-      const programmeSlots = channelSchedule.slots.filter((slot) => !slot.isIdent);
+      const programmeSlots = channelSchedule.programmes?.length
+        ? channelSchedule.programmes
+        : channelSchedule.slots.filter((slot) => !slot.isIdent && !slot.isAd);
       const startIndex = findUpcomingStartIndex(programmeSlots, now);
       const upcoming = programmeSlots.slice(startIndex, startIndex + 4);
 

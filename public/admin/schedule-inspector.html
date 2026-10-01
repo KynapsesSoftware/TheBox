@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box — Schedule inspector</title>
+    <link rel="stylesheet" href="/admin/css/admin.css" />
+  </head>
+  <body class="admin-app">
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <div class="admin-brand">
+          The Box
+          <span>Admin tools</span>
+        </div>
+        <nav id="admin-nav" class="admin-nav" aria-label="Admin navigation"></nav>
+        <div class="admin-sidebar-footer">
+          <a href="/">← Back to TV UI</a>
+        </div>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <h1>Schedule inspector</h1>
+          <span class="admin-status"><span id="status-text">Initialising…</span> · <span id="clock-text"></span></span>
+        </header>
+
+        <div class="admin-content">
+          <section class="admin-card" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+            <h2>Broadcast timeline</h2>
+            <p class="admin-summary" style="margin-top: -0.5rem;">
+              Every playback slot for the selected channel and date, including mid-roll segments,
+              ads, and idents.
+            </p>
+
+            <div class="admin-controls">
+              <div class="admin-field">
+                <label for="channel-select">Channel</label>
+                <select id="channel-select"></select>
+              </div>
+              <div class="admin-field">
+                <label for="schedule-date">Date</label>
+                <input id="schedule-date" type="date" />
+              </div>
+              <button id="refresh-btn" type="button" class="admin-btn admin-btn-secondary">Refresh</button>
+              <button id="rescan-btn" type="button" class="admin-btn">Rescan channels &amp; ads</button>
+            </div>
+
+            <div id="inspector-summary" class="admin-summary"></div>
+
+            <div class="admin-legend">
+              <span class="admin-legend-item slot-programme">Programme</span>
+              <span class="admin-legend-item slot-programme-part">Part</span>
+              <span class="admin-legend-item slot-ad">Ad</span>
+              <span class="admin-legend-item slot-ident">Ident</span>
+              <span class="admin-legend-item slot-now">Now</span>
+            </div>
+
+            <div id="inspector-body" class="admin-table-wrap"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/admin/js/admin-common.js"></script>
+    <script src="/admin/js/schedule-inspector.js"></script>
+  </body>
+</html>

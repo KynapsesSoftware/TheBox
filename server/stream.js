@@ -98,9 +98,37 @@ function createMediaHandler(getChannelById, mediaType = 'video') {
   };
 }
 
+function findAdFile(adsLibrary, mediaPath) {
+  const normalizedPath = normalizeMediaPath(mediaPath);
+  const match = adsLibrary.ads.find((item) => item.filename === normalizedPath);
+  return match?.path || null;
+}
+
+function createAdMediaHandler(getAdsLibrary) {
+  return (req, res) => {
+    const adsLibrary = getAdsLibrary();
+    if (!adsLibrary?.active) {
+      res.status(404).json({ error: 'Ads are not available' });
+      return;
+    }
+
+    const mediaPath = getRequestedMediaPath(req);
+    const filePath = findAdFile(adsLibrary, mediaPath);
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'Media file not found' });
+      return;
+    }
+
+    streamMediaFile(req, res, filePath);
+  };
+}
+
 module.exports = {
   contentTypeForPath,
+  createAdMediaHandler,
   createMediaHandler,
+  findAdFile,
   findMediaFile,
   getRequestedMediaPath,
 };

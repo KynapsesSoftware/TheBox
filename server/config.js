@@ -19,6 +19,15 @@ const DEFAULT_CONFIG = {
     title: 'The Box',
     defaultPage: 100,
   },
+  ads: {
+    enabled: false,
+    path: '',
+    breakMinAds: 1,
+    breakMaxAds: 3,
+    intervalMinutes: 15,
+    intervalJitterMinutes: 3,
+    programEndGuardMinutes: 5,
+  },
 };
 
 function deepMerge(base, override) {

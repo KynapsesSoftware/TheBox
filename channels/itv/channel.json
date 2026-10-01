@@ -6,6 +6,7 @@
     "sourcePath": "",
     "scanSubfolders": true,
     "identInterval": 0,
+    "adsEnabled": true,
     "schedule": {
       "startTime": "06:00",
       "endTime": "23:00"

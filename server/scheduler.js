@@ -1,3 +1,6 @@
+const { channelAdsEnabled } = require('./ads');
+const { enrichNowPlaying, generateScheduleWithAds } = require('./adScheduler');
+
 function hashSeed(input) {
   let hash = 2166136261;
   for (let i = 0; i < input.length; i += 1) {
@@ -155,11 +158,13 @@ function createScheduleSlot(channel, item, cursor, isIdent = false) {
     durationSeconds: item.durationSeconds,
     mediaUrl,
     isIdent,
+    isAd: false,
+    offsetSeconds: 0,
+    stopOffsetSeconds: item.durationSeconds,
   };
 }
 
 function generateChannelSchedule(channel, options) {
-  const { timezone } = options;
   const {
     dateKey,
     windowStartMs,
@@ -173,7 +178,6 @@ function generateChannelSchedule(channel, options) {
   const identPlaylist = identInterval > 0
     ? buildIdentPlaylist(channel.idents || [], hashSeed(`${channel.id}:idents:${dateKey}`))
     : [];
-  const slots = [];
 
   if (playlist.length === 0) {
     return {
@@ -182,9 +186,35 @@ function generateChannelSchedule(channel, options) {
       startTime,
       endTime,
       slots: [],
+      programmes: [],
     };
   }
 
+  const adsLibrary = options.adsLibrary || null;
+  if (adsLibrary && channelAdsEnabled(channel, adsLibrary)) {
+    const window = { windowStartMs, windowEndMs };
+    const { slots, programmes } = generateScheduleWithAds(
+      channel,
+      window,
+      playlist,
+      identPlaylist,
+      identInterval,
+      adsLibrary,
+      dateKey,
+      seed,
+    );
+
+    return {
+      channelId: channel.id,
+      date: dateKey,
+      startTime,
+      endTime,
+      slots,
+      programmes,
+    };
+  }
+
+  const slots = [];
   let cursor = windowStartMs;
   let index = 0;
   let identIndex = 0;
@@ -219,12 +249,26 @@ function generateChannelSchedule(channel, options) {
     }
   }
 
+  const programmes = slots
+    .filter((slot) => !slot.isIdent && !slot.isAd)
+    .map((slot) => ({
+      title: slot.title,
+      filename: slot.filename,
+      startsAt: slot.startsAt,
+      endsAt: slot.endsAt,
+      durationSeconds: slot.durationSeconds,
+      mediaUrl: slot.mediaUrl,
+      isIdent: false,
+      isAd: false,
+    }));
+
   return {
     channelId: channel.id,
     date: dateKey,
     startTime,
     endTime,
     slots,
+    programmes,
   };
 }
 
@@ -235,9 +279,11 @@ function findCurrentSlot(schedule, now = new Date()) {
     const startMs = Date.parse(slot.startsAt);
     const endMs = Date.parse(slot.endsAt);
     if (nowMs >= startMs && nowMs < endMs) {
+      const elapsedInSlotSeconds = Math.floor((nowMs - startMs) / 1000);
+      const fileOffsetAtSlotStart = slot.offsetSeconds || 0;
       return {
         ...slot,
-        offsetSeconds: Math.floor((nowMs - startMs) / 1000),
+        offsetSeconds: fileOffsetAtSlotStart + elapsedInSlotSeconds,
       };
     }
   }
@@ -249,10 +295,16 @@ function generateGuide(channels, options) {
   return channels.map((channel) => generateChannelSchedule(channel, options));
 }
 
+function resolveNowPlaying(schedule, now = new Date()) {
+  const current = findCurrentSlot(schedule, now);
+  return enrichNowPlaying(schedule, current);
+}
+
 module.exports = {
   generateChannelSchedule,
   generateGuide,
   findCurrentSlot,
+  resolveNowPlaying,
   getDateKey,
   resolveChannelWindow,
   timeOnDateMs,

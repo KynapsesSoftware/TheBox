@@ -11,6 +11,7 @@ const watchHelp = document.getElementById('watch-help');
 const nowTitle = document.getElementById('now-title');
 const nowTimes = document.getElementById('now-times');
 const channelName = document.getElementById('channel-name');
+const channelPageNumber = document.getElementById('channel-page-number');
 const statusText = document.getElementById('status-text');
 const clockText = document.getElementById('clock-text');
 const scheduleList = document.getElementById('schedule-list');
@@ -18,6 +19,7 @@ const scheduleList = document.getElementById('schedule-list');
 let channelConfig = null;
 let currentMediaUrl = null;
 let currentStartsAt = null;
+let currentStopOffsetSeconds = null;
 let lastScrolledStartsAt = null;
 let scheduleFocusIndex = 0;
 let watchRemoteMounted = false;
@@ -41,7 +43,20 @@ function updateClock() {
   clockText.textContent = new Date().toLocaleString();
 }
 
+function updateChannelPageLabel() {
+  if (!channelPageNumber) {
+    return;
+  }
+
+  const page = channelConfig?.pageNumber;
+  channelPageNumber.textContent = Number.isInteger(page)
+    ? `PAGE ${page}`
+    : 'PAGE ---';
+}
+
 function applyChannelMode() {
+  updateChannelPageLabel();
+
   const audio = isAudioChannel();
 
   mediaStage.classList.toggle('audio-mode', audio);
@@ -279,7 +294,7 @@ async function loadNowPlaying(advanceFromEnded = false) {
           channelName: now.channelName,
           mediaType: now.mediaType,
           ...next,
-          offsetSeconds: 0,
+          offsetSeconds: next.offsetSeconds ?? 0,
         };
       }
     }
@@ -299,17 +314,31 @@ async function loadNowPlaying(advanceFromEnded = false) {
 
     if (sourceChanged || slotChanged) {
       currentStartsAt = now.startsAt;
-      player.currentTime = now.offsetSeconds || 0;
+      const seekTo = now.offsetSeconds || 0;
+      player.currentTime = seekTo;
       await player.play().catch(() => {});
     }
 
-    const programmeSlots = schedule.slots.filter((slot) => !slot.isIdent);
+    if (now.isAd || now.isIdent) {
+      currentStopOffsetSeconds = null;
+    } else if (Number.isFinite(now.stopOffsetSeconds)) {
+      currentStopOffsetSeconds = now.stopOffsetSeconds;
+    } else {
+      currentStopOffsetSeconds = null;
+    }
+
+    const programmeSlots = schedule.programmes?.length
+      ? schedule.programmes
+      : schedule.slots.filter((slot) => !slot.isIdent && !slot.isAd);
+    const nowMs = Date.now();
 
     scheduleList.innerHTML = '';
     programmeSlots.forEach((slot) => {
       const row = document.createElement('div');
       row.className = 'row';
-      if (!now.isIdent && slot.startsAt === now.startsAt) {
+      const slotStartMs = Date.parse(slot.startsAt);
+      const slotEndMs = Date.parse(slot.endsAt);
+      if (nowMs >= slotStartMs && nowMs < slotEndMs) {
         row.classList.add('now-playing');
       }
       row.innerHTML = `
@@ -320,7 +349,11 @@ async function loadNowPlaying(advanceFromEnded = false) {
       scheduleList.appendChild(row);
     });
 
-    const nowIndex = programmeSlots.findIndex((slot) => slot.startsAt === now.startsAt);
+    const nowIndex = programmeSlots.findIndex((slot) => {
+      const slotStartMs = Date.parse(slot.startsAt);
+      const slotEndMs = Date.parse(slot.endsAt);
+      return nowMs >= slotStartMs && nowMs < slotEndMs;
+    });
     if (nowIndex >= 0) {
       scheduleFocusIndex = nowIndex;
     }
@@ -345,6 +378,7 @@ async function loadNowPlaying(advanceFromEnded = false) {
 async function initWatchPage() {
   if (!channelId) {
     statusText.textContent = 'NO CHANNEL SELECTED';
+    updateChannelPageLabel();
     return;
   }
 
@@ -361,6 +395,17 @@ async function initWatchPage() {
 function bindPlayerEvents(player) {
   player.addEventListener('ended', () => {
     loadNowPlaying(true);
+  });
+
+  player.addEventListener('timeupdate', () => {
+    if (currentStopOffsetSeconds == null || player.paused) {
+      return;
+    }
+
+    if (player.currentTime >= currentStopOffsetSeconds - 0.35) {
+      currentStopOffsetSeconds = null;
+      loadNowPlaying(true);
+    }
   });
 }
 

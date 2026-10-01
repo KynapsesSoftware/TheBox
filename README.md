@@ -36,6 +36,8 @@ pnpm start
 
 Open [http://localhost:8080](http://localhost:8080).
 
+Admin tools (schedule inspector, rescan UI) live at [http://localhost:8080/admin/](http://localhost:8080/admin/) — separate from the Ceefax viewer. See the [User Guide — Admin tools](userguide.md#admin-tools).
+
 ## Configuration
 
 Edit `config.json`:
@@ -54,9 +56,20 @@ Edit `config.json`:
     "hoursToGenerate": 24,
     "defaultStartTime": "00:00",
     "defaultEndTime": "24:00"
+  },
+  "ads": {
+    "enabled": false,
+    "path": "/absolute/path/to/ads",
+    "breakMinAds": 1,
+    "breakMaxAds": 3,
+    "intervalMinutes": 15,
+    "intervalJitterMinutes": 3,
+    "programEndGuardMinutes": 5
   }
 }
 ```
+
+Set `"adsEnabled": true` in a video channel’s `channel.json` to opt in when global ads are enabled. See the [User Guide](userguide.md) for details.
 
 ## Adding channels
 
@@ -125,7 +138,8 @@ For best results on Pi, use H.264 MP4 files at 720p or lower.
 TheBox/
 ├── config.json
 ├── channels/
-├── public/          # Ceefax-style HTML/CSS/JS UI
+├── public/          # Ceefax-style viewer UI
+│   └── admin/       # Modern admin tools (CSS/JS separate from thebox.css)
 └── server/          # Express app, scanner, scheduler, streaming
 ```
 

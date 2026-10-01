@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box — Admin</title>
+    <link rel="stylesheet" href="/admin/css/admin.css" />
+  </head>
+  <body class="admin-app">
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <div class="admin-brand">
+          The Box
+          <span>Admin tools</span>
+        </div>
+        <nav id="admin-nav" class="admin-nav" aria-label="Admin navigation"></nav>
+        <div class="admin-sidebar-footer">
+          <a href="/">← Back to TV UI</a>
+        </div>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <h1>Overview</h1>
+          <span id="clock-text" class="admin-status"></span>
+        </header>
+
+        <div class="admin-content">
+          <section class="admin-card">
+            <h2>About</h2>
+            <p>
+              Admin tools help you operate and debug The Box outside the retro Ceefax viewer
+              (Pages 100–400). They use the same HTTP API as the main app.
+            </p>
+          </section>
+
+          <section class="admin-card">
+            <h2>Tools</h2>
+            <ul class="admin-tool-list">
+              <li>
+                <h3><a href="/admin/schedule-inspector.html">Schedule inspector</a></h3>
+                <p>
+                  Full playback timeline for one channel: programme segments, commercial breaks,
+                  and idents (including items hidden from the TV guide and Today list).
+                </p>
+              </li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/admin/js/admin-common.js"></script>
+    <script>
+      const clockText = document.getElementById('clock-text');
+      function updateClock() {
+        clockText.textContent = new Date().toLocaleString();
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+    </script>
+  </body>
+</html>

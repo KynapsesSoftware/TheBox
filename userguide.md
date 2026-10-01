@@ -127,6 +127,15 @@ Edit `config.json` in the project root:
   "ui": {
     "title": "The Box",
     "defaultPage": 100
+  },
+  "ads": {
+    "enabled": false,
+    "path": "/absolute/path/to/ads",
+    "breakMinAds": 1,
+    "breakMaxAds": 3,
+    "intervalMinutes": 15,
+    "intervalJitterMinutes": 3,
+    "programEndGuardMinutes": 5
   }
 }
 ```
@@ -148,6 +157,12 @@ Edit `config.json` in the project root:
 | `schedule.defaultEndTime` | Default broadcast end (`HH:MM`; use `24:00` for midnight) |
 | `ui.title` | Application title (server logs) |
 | `ui.defaultPage` | Default Ceefax page number |
+| `ads.enabled` | Master switch for commercial breaks on video channels |
+| `ads.path` | **Absolute** path to a folder of ad video files (subfolders are scanned) |
+| `ads.breakMinAds` / `ads.breakMaxAds` | Random number of ads per break (inclusive range) |
+| `ads.intervalMinutes` | Target minutes between commercial breaks (e.g. first break ~15 minutes after channel start) |
+| `ads.intervalJitterMinutes` | Random ± minutes applied to each interval |
+| `ads.programEndGuardMinutes` | Defer a break that would start within this many minutes of a programme’s end |
 
 After changing `config.json`, restart the server or wait for the next automatic scan (if `scanIntervalMinutes` is set).
 
@@ -221,6 +236,7 @@ Audio channel example:
 | `sourcePath` | Optional folder containing this channel’s video files. Can be absolute (`/mnt/nas/shows/bbc1`) or relative to the project folder (`../media/bbc1`). A trailing slash is optional. When omitted or empty, videos are read from the channel folder itself |
 | `maxContentDuration` | Optional maximum programme length in **minutes**. Videos longer than this are scanned but excluded from the daily schedule |
 | `identInterval` | Optional ident insertion interval. `0` = no idents (default). `1` = ident after every programme. `2` = ident after every two programmes, and so on. Requires an `ident/` subfolder in the channel directory |
+| `adsEnabled` | Optional. When `true`, this video channel includes commercial breaks if ads are enabled globally and the ad library is valid. Default is off (omit or set `false`) |
 | `scanSubfolders` | Optional. When `true`, scan video files in all subfolders of the channel folder or `sourcePath`. Default is `false` (top-level files only). The channel’s `ident/` folder is always excluded from programme scans |
 | `schedule.startTime` | When this channel starts broadcasting each day (`HH:MM`, 24-hour) |
 | `schedule.endTime` | When new programmes stop being scheduled (`HH:MM`) |
@@ -240,6 +256,18 @@ channels/bbc1/
 ```
 
 Ident files are always read from the channel folder, even when `sourcePath` points elsewhere for programme content. When `identInterval` is greater than zero and one or more playable idents exist, the scheduler inserts them after every N programmes. If several idents are available, a shuffled order is chosen for the day (stable until the next day’s schedule). Idents play during the broadcast but are not shown in the TV guide or Today schedule lists. Use video idents on video channels and audio idents on audio channels.
+
+### Commercial ads (video channels)
+
+Ads are stored in a **single global folder** configured in `config.json` (`ads.path` must be an absolute path). Enable them with `"ads.enabled": true`, then opt in per video channel with `"adsEnabled": true` in that channel’s `channel.json`.
+
+- Ad files use the same extensions as video channels; subfolders under `ads.path` are scanned automatically.
+- Break timing is calculated when the daily schedule is built (including mid-programme breaks). Programme rows in the TV guide and Today list show **broadcast** start/end times (including time taken by ads inside that programme). Individual ads are not listed.
+- If ads are enabled but the folder is missing, empty, invalid, or contains fewer files than `ads.breakMaxAds`, the server logs a warning on startup/rescan and **no ads** are scheduled.
+- Invalid ad settings (for example `breakMinAds` > `breakMaxAds`) also disable ads with a console warning.
+- Rescanning channels rescans ads and rebuilds commercial breaks for the current day.
+- When an ident is also due before the next programme, **ads play first, then the ident**. Idents never follow mid-programme ad breaks.
+- During playback, the Now Showing overlay keeps the current or next programme title (not ad filenames). Between-programme ads show the **next** programme’s times.
 
 ### Audio channels
 
@@ -291,8 +319,10 @@ The UI is styled like teletext (BBC Ceefax) using the **VT323** font (self-hoste
 |---|---|---|
 | **100** | `/` | Channel list |
 | **200** | `/guide.html` | TV guide (all channels) |
-| **300** | `/watch.html?channel=…` | Live channel view |
+| **300** | `/watch.html?channel=…` | Live channel view (header shows that channel’s Ceefax page, e.g. PAGE 101) |
 | **400** | `/remote-test.html` | Remote control troubleshooting |
+
+Admin and debugging tools live under **`/admin/`** (modern UI, not Ceefax pages). See [Admin tools](#admin-tools).
 
 ### Layout
 
@@ -466,6 +496,39 @@ The overlay sits **behind** the main UI (`z-index: 0`).
 
 ---
 
+## Admin tools
+
+Operator tools are served from **`public/admin/`** with their own layout and styles (`admin/css/admin.css`, `admin/js/admin-common.js`). They are **not** Ceefax pages and are **not** reachable via the TV remote page numbers (100–400).
+
+| URL | Purpose |
+|---|---|
+| **`/admin/`** | Overview and links to each tool |
+| **`/admin/schedule-inspector.html`** | Full playback timeline for one channel |
+
+Open [http://localhost:8080/admin/](http://localhost:8080/admin/) after starting the server. Use **Back to TV UI** in the sidebar to return to Page 100.
+
+### Schedule inspector
+
+Inspect the **full playback timeline** for one channel on a chosen day.
+
+Unlike the TV guide (Page 200) and Today list (Page 300), the inspector shows **every playback slot**:
+
+- Programme segments (including mid-programme resume offsets)
+- Commercial breaks (mid-roll within a programme, gap between programmes)
+- Idents
+
+Use the **channel** and **date** controls, then **Refresh**. **Rescan channels & ads** rescans media and rebuilds schedules (same as `POST /api/admin/rescan`). The current slot is highlighted when viewing today’s date. The summary line shows ad/ident settings and slot counts.
+
+Query parameters: `?channel=cartoons&date=2026-10-01` (date is `YYYY-MM-DD` in the schedule timezone’s calendar day).
+
+### Adding more admin tools
+
+1. Add an HTML page under `public/admin/`.
+2. Link it from `public/admin/index.html` and register it in `TheBoxAdmin.tools` in `public/admin/js/admin-common.js`.
+3. Reuse `admin.css` classes (`admin-card`, `admin-btn`, etc.) for a consistent look.
+
+---
+
 ## Remote test page (Page 400)
 
 Open [http://localhost:8080/remote-test.html](http://localhost:8080/remote-test.html) or dial **400** on the remote.
@@ -485,7 +548,7 @@ Use this page to identify unknown key codes from your remote, then add them to `
 
 ### Live broadcast behaviour
 
-The watch page (Page 300) joins the current programme **mid-playback** based on the schedule and wall-clock time. The **Today** panel lists the full day’s schedule for that channel and scrolls to the currently playing item.
+The watch page joins the current programme **mid-playback** based on the schedule and wall-clock time. The top-right header shows the channel’s **page number** from `channel.json` (not the app route 300). The **Today** panel lists the full day’s broadcast schedule for that channel and scrolls to the currently playing item.
 
 ### Full screen
 
@@ -617,6 +680,8 @@ PAGE 100  →  Channel list
 PAGE 200  →  TV guide
 PAGE 300  →  Watch (last channel)
 PAGE 400  →  Remote test
+
+/admin/   →  Admin tools (browser only)
 
 ENTER     →  Select / Full screen (watch)
 BACK      →  Back / Exit full screen

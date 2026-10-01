@@ -93,6 +93,10 @@ function parseScanSubfolders(value) {
   return value === true || value === 'true';
 }
 
+function parseAdsEnabled(value) {
+  return value === true || value === 'true';
+}
+
 function normalizeMediaPath(mediaPath) {
   return mediaPath.replace(/\\/g, '/');
 }
@@ -257,6 +261,7 @@ async function scanChannelFolder(channelDir, scanOptions, projectRoot) {
     scanSubfolders,
     maxContentDuration: parseMaxContentDuration(meta.maxContentDuration),
     identInterval: parseIdentInterval(meta.identInterval),
+    adsEnabled: parseAdsEnabled(meta.adsEnabled),
     schedule: {
       startTime: meta.schedule?.startTime || null,
       endTime: meta.schedule?.endTime || null,
@@ -290,11 +295,13 @@ async function scanChannels(channelsRoot, scanOptions, projectRoot = path.dirnam
 }
 
 module.exports = {
+  normalizeDirectoryPath,
   normalizeMediaPath,
   parseIdentInterval,
   parseMaxContentDuration,
   parseMediaType,
   parseScanSubfolders,
+  parseAdsEnabled,
   resolveArtworkPath,
   resolveSourcePath,
   scanChannels,

@@ -2,8 +2,9 @@ const express = require('express');
 const path = require('path');
 const { loadConfig, resolveChannelsRoot } = require('./config');
 const { scanChannels } = require('./scanner');
-const { generateChannelSchedule, generateGuide, findCurrentSlot, getDateKey } = require('./scheduler');
-const { createMediaHandler } = require('./stream');
+const { loadAdsLibrary } = require('./ads');
+const { generateChannelSchedule, generateGuide, resolveNowPlaying, getDateKey } = require('./scheduler');
+const { createAdMediaHandler, createMediaHandler } = require('./stream');
 
 const config = loadConfig();
 const projectRoot = path.dirname(config.configPath);
@@ -12,6 +13,7 @@ const publicDir = path.join(__dirname, '..', 'public');
 
 const app = express();
 let channels = [];
+let adsLibrary = null;
 let scanTimer = null;
 
 function getChannelById(channelId) {
@@ -29,6 +31,7 @@ function serializeChannel(channel) {
     sourcePath: channel.sourcePath || null,
     maxContentDuration: channel.maxContentDuration ?? null,
     identInterval: channel.identInterval ?? 0,
+    adsEnabled: channel.adsEnabled === true,
     scanSubfolders: channel.scanSubfolders ?? false,
     schedule: channel.schedule,
     videoCount: channel.videos.length,
@@ -47,6 +50,7 @@ function scheduleOptions(date = new Date()) {
     hoursToGenerate: config.schedule.hoursToGenerate,
     defaultStartTime: config.schedule.defaultStartTime,
     defaultEndTime: config.schedule.defaultEndTime,
+    adsLibrary,
   };
 }
 
@@ -61,10 +65,14 @@ async function refreshChannels() {
     videoExtensions: config.videoExtensions,
     audioExtensions: config.audioExtensions,
   }, projectRoot);
+  adsLibrary = await loadAdsLibrary(config);
   const mediaCount = channels.reduce((sum, channel) => sum + channel.videos.length, 0);
   const unplayableCount = countUnplayableMedia(channels);
 
   console.log(`Scanned ${channels.length} channel(s), ${mediaCount} programme(s) from ${channelsRoot}`);
+  if (adsLibrary.active) {
+    console.log(`Loaded ${adsLibrary.ads.length} ad(s) from ${adsLibrary.config.path}`);
+  }
 
   if (unplayableCount > 0) {
     console.warn(
@@ -116,7 +124,18 @@ app.get('/api/channels/:id/schedule', (req, res) => {
     ? new Date(`${req.query.date}T12:00:00.000Z`)
     : new Date();
 
-  res.json(generateChannelSchedule(channel, scheduleOptions(date)));
+  const schedule = generateChannelSchedule(channel, scheduleOptions(date));
+
+  res.json({
+    ...schedule,
+    meta: {
+      timezone: config.schedule.timezone,
+      adsLibraryActive: adsLibrary?.active === true,
+      channelAdsEnabled: channel.adsEnabled === true,
+      identInterval: channel.identInterval ?? 0,
+      identCount: channel.idents.length,
+    },
+  });
 });
 
 app.get('/api/channels/:id/now', (req, res) => {
@@ -127,7 +146,7 @@ app.get('/api/channels/:id/now', (req, res) => {
   }
 
   const schedule = generateChannelSchedule(channel, scheduleOptions());
-  const current = findCurrentSlot(schedule);
+  const current = resolveNowPlaying(schedule);
 
   if (!current) {
     const unplayableCount = channel.videos.filter((video) => !video.durationSeconds).length;
@@ -157,6 +176,9 @@ app.get('/api/channels/:id/now', (req, res) => {
     channelName: channel.displayName,
     mediaType: channel.mediaType || 'video',
     ...current,
+    title: current.displayTitle || current.title,
+    startsAt: current.displayStartsAt || current.startsAt,
+    endsAt: current.displayEndsAt || current.endsAt,
   });
 });
 
@@ -186,6 +208,7 @@ app.post('/api/admin/rescan', async (_req, res) => {
   res.json({ ok: true, channels: channels.length });
 });
 
+app.get('/media/ads/*', createAdMediaHandler(() => adsLibrary));
 app.get('/media/:channelId/ident/*', createMediaHandler(getChannelById, 'ident'));
 app.get('/media/:channelId/*', createMediaHandler(getChannelById));
 
