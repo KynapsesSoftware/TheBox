@@ -86,7 +86,8 @@ pnpm dev
 
 ```text
 TheBox/
-├── config.json              # Server and schedule settings
+├── config.json              # Shipped server and schedule settings (template)
+├── config.local.json        # Optional local overrides (gitignored; create if needed)
 ├── userguide.md             # This guide
 ├── channels/                # One subfolder per TV channel
 │   └── bbc1/
@@ -136,6 +137,9 @@ Edit `config.json` in the project root:
     "intervalMinutes": 15,
     "intervalJitterMinutes": 3,
     "programEndGuardMinutes": 5
+  },
+  "testPattern": {
+    "path": ""
   }
 }
 ```
@@ -163,8 +167,32 @@ Edit `config.json` in the project root:
 | `ads.intervalMinutes` | Target minutes between commercial breaks (e.g. first break ~15 minutes after channel start) |
 | `ads.intervalJitterMinutes` | Random ± minutes applied to each interval |
 | `ads.programEndGuardMinutes` | Defer a break that would start within this many minutes of a programme’s end |
+| `testPattern.path` | Optional global test card: path to a **file** (`testcard.mp4` / `testcard.mkv`) or a **folder** containing one of those names. Used when a channel has no programme on air and no channel-specific test card |
 
-After changing `config.json`, restart the server or wait for the next automatic scan (if `scanIntervalMinutes` is set).
+After changing configuration, restart the server or wait for the next automatic scan (if `scanIntervalMinutes` is set).
+
+### Local overrides (`config.local.json`)
+
+For machine-specific settings (timezone, ad folder paths, alternate `channelsRoot`, port changes on a dev laptop), create **`config.local.json`** in the project root beside `config.json`.
+
+- The server always loads **`config.json` first**, then merges **`config.local.json`** on top when that file exists.
+- Use the same JSON shape as `config.json`; you only need to include keys you want to override (nested objects are merged, not replaced wholesale).
+- **`config.local.json` is not tracked in git** — use it for paths and toggles that should not be committed.
+
+Example (optional file):
+
+```json
+{
+  "schedule": { "timezone": "Australia/Adelaide" },
+  "ads": {
+    "enabled": true,
+    "path": "/home/you/Videos/ads"
+  },
+  "channelsRoot": "/path/to/my-local-channels"
+}
+```
+
+Fresh clones work with **`config.json` alone**; no copy or rename step is required.
 
 ---
 
@@ -256,6 +284,16 @@ channels/bbc1/
 ```
 
 Ident files are always read from the channel folder, even when `sourcePath` points elsewhere for programme content. When `identInterval` is greater than zero and one or more playable idents exist, the scheduler inserts them after every N programmes. If several idents are available, a shuffled order is chosen for the day (stable until the next day’s schedule). Idents play during the broadcast but are not shown in the TV guide or Today schedule lists. Use video idents on video channels and audio idents on audio channels.
+
+### Test cards (standby signal)
+
+When a channel has **no programme on air** (outside broadcast hours, empty schedule, or no playable library), the watch page can show a **test card** video instead of an error.
+
+**Channel test card (optional):** place **`testcard.mp4`** or **`testcard.mkv`** in the **root of the channel folder** (next to `channel.json`), not in `sourcePath`. Only one file is used; if both exist, **`testcard.mp4`** wins. These filenames are never scheduled as programmes.
+
+**Global fallback:** set `testPattern.path` in `config.json` (or `config.local.json`) to an absolute or project-relative path pointing at a test card **file**, or a **folder** that contains `testcard.mp4` or `testcard.mkv`. If a channel has its own test card, that file is used; otherwise the global card applies.
+
+On the watch page the clip **loops** until a programme is scheduled again. Status shows **TEST SIGNAL**. Audio channels display the test card on the video stage while off air.
 
 ### Commercial ads (video channels)
 
@@ -688,7 +726,8 @@ BACK      →  Back / Exit full screen
 ↑ ↓       →  Navigate lists
 PG+/PG-   →  Jump in lists
 
-config.json          →  Server, timezone, defaults
+config.json          →  Shipped server defaults
+config.local.json    →  Optional local overrides (gitignored)
 channel.json         →  Per-channel name, page, colour, broadcast hours
 public/js/api.js     →  Remote, OSD, dev guide toggles
 public/js/remote.js  →  Key mappings and page navigation timing

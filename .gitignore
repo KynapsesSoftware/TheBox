@@ -9,4 +9,5 @@ Thumbs.db
 *.mov
 *.avi
 .env
+config.local.json
 

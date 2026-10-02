@@ -124,11 +124,38 @@ function createAdMediaHandler(getAdsLibrary) {
   };
 }
 
+function createGlobalTestCardHandler(getGlobalTestCardPath) {
+  return (req, res) => {
+    const filePath = getGlobalTestCardPath();
+    if (!filePath || !fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'Global test card not found' });
+      return;
+    }
+
+    streamMediaFile(req, res, filePath);
+  };
+}
+
+function createChannelTestCardHandler(getChannelById) {
+  return (req, res) => {
+    const channel = getChannelById(req.params.channelId);
+    if (!channel?.testCardPath || !fs.existsSync(channel.testCardPath)) {
+      res.status(404).json({ error: 'Channel test card not found' });
+      return;
+    }
+
+    streamMediaFile(req, res, channel.testCardPath);
+  };
+}
+
 module.exports = {
   contentTypeForPath,
   createAdMediaHandler,
+  createChannelTestCardHandler,
+  createGlobalTestCardHandler,
   createMediaHandler,
   findAdFile,
   findMediaFile,
   getRequestedMediaPath,
+  streamMediaFile,
 };

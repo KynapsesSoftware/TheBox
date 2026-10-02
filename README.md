@@ -40,7 +40,9 @@ Admin tools (schedule inspector, rescan UI) live at [http://localhost:8080/admin
 
 ## Configuration
 
-Edit `config.json`:
+Edit `config.json` (shipped defaults). For machine-specific paths or timezone, add optional **`config.local.json`** in the project root — it is merged on top at startup and is not committed to git. See the [User Guide — Local overrides](userguide.md#local-overrides-configlocaljson).
+
+Example `config.json`:
 
 ```json
 {
@@ -65,6 +67,9 @@ Edit `config.json`:
     "intervalMinutes": 15,
     "intervalJitterMinutes": 3,
     "programEndGuardMinutes": 5
+  },
+  "testPattern": {
+    "path": ""
   }
 }
 ```
@@ -136,7 +141,8 @@ For best results on Pi, use H.264 MP4 files at 720p or lower.
 
 ```text
 TheBox/
-├── config.json
+├── config.json              # Shipped defaults
+│   config.local.json        # Optional overrides (gitignored)
 ├── channels/
 ├── public/          # Ceefax-style viewer UI
 │   └── admin/       # Modern admin tools (CSS/JS separate from thebox.css)

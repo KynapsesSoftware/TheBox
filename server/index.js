@@ -4,7 +4,17 @@ const { loadConfig, resolveChannelsRoot } = require('./config');
 const { scanChannels } = require('./scanner');
 const { loadAdsLibrary } = require('./ads');
 const { generateChannelSchedule, generateGuide, resolveNowPlaying, getDateKey } = require('./scheduler');
-const { createAdMediaHandler, createMediaHandler } = require('./stream');
+const {
+  createAdMediaHandler,
+  createChannelTestCardHandler,
+  createGlobalTestCardHandler,
+  createMediaHandler,
+} = require('./stream');
+const {
+  buildTestPatternNowPlaying,
+  resolveConfiguredTestPatternPath,
+  resolveEffectiveTestCardPath,
+} = require('./testPattern');
 
 const config = loadConfig();
 const projectRoot = path.dirname(config.configPath);
@@ -14,6 +24,7 @@ const publicDir = path.join(__dirname, '..', 'public');
 const app = express();
 let channels = [];
 let adsLibrary = null;
+let globalTestCardPath = null;
 let scanTimer = null;
 
 function getChannelById(channelId) {
@@ -36,6 +47,7 @@ function serializeChannel(channel) {
     schedule: channel.schedule,
     videoCount: channel.videos.length,
     identCount: channel.idents.length,
+    hasTestCard: Boolean(channel.testCardPath || globalTestCardPath),
     totalDurationSeconds: channel.videos.reduce(
       (sum, video) => sum + (video.durationSeconds || 0),
       0,
@@ -66,12 +78,16 @@ async function refreshChannels() {
     audioExtensions: config.audioExtensions,
   }, projectRoot);
   adsLibrary = await loadAdsLibrary(config);
+  globalTestCardPath = resolveConfiguredTestPatternPath(config.testPattern?.path, projectRoot);
   const mediaCount = channels.reduce((sum, channel) => sum + channel.videos.length, 0);
   const unplayableCount = countUnplayableMedia(channels);
 
   console.log(`Scanned ${channels.length} channel(s), ${mediaCount} programme(s) from ${channelsRoot}`);
   if (adsLibrary.active) {
     console.log(`Loaded ${adsLibrary.ads.length} ad(s) from ${adsLibrary.config.path}`);
+  }
+  if (globalTestCardPath) {
+    console.log(`Global test card: ${globalTestCardPath}`);
   }
 
   if (unplayableCount > 0) {
@@ -149,6 +165,12 @@ app.get('/api/channels/:id/now', (req, res) => {
   const current = resolveNowPlaying(schedule);
 
   if (!current) {
+    const testCard = resolveEffectiveTestCardPath(channel, globalTestCardPath);
+    if (testCard) {
+      res.json(buildTestPatternNowPlaying(channel, testCard));
+      return;
+    }
+
     const unplayableCount = channel.videos.filter((video) => !video.durationSeconds).length;
 
     if (channel.videos.length === 0) {
@@ -209,6 +231,8 @@ app.post('/api/admin/rescan', async (_req, res) => {
 });
 
 app.get('/media/ads/*', createAdMediaHandler(() => adsLibrary));
+app.get('/media/testcard/global', createGlobalTestCardHandler(() => globalTestCardPath));
+app.get('/media/:channelId/testcard', createChannelTestCardHandler(getChannelById));
 app.get('/media/:channelId/ident/*', createMediaHandler(getChannelById, 'ident'));
 app.get('/media/:channelId/*', createMediaHandler(getChannelById));
 
@@ -226,6 +250,9 @@ async function start() {
   const server = app.listen(config.port, config.host, () => {
     console.log(`${config.ui.title} running at http://localhost:${config.port}`);
     console.log(`Channels root: ${channelsRoot}`);
+    if (config.localConfigPath) {
+      console.log(`Config overrides: ${config.localConfigPath}`);
+    }
   });
 
   server.on('error', (error) => {

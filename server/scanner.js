@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { probeDurationSeconds, displayTitleFromFilename } = require('./metadata');
+const { isTestCardFilename, resolveChannelTestCardPath } = require('./testPattern');
 
 function slugify(value) {
   return value
@@ -161,6 +162,10 @@ async function collectVideosFromDirectory(rootDir, extensions, options = {}) {
         continue;
       }
 
+      if (isTestCardFilename(entry.name)) {
+        continue;
+      }
+
       const filename = normalizeMediaPath(entryRelativePath);
       if (seenPaths.has(filename)) {
         console.warn(`Channel "${channelId}": duplicate media path "${filename}"`);
@@ -243,6 +248,7 @@ async function scanChannelFolder(channelDir, scanOptions, projectRoot) {
   });
   const identDir = path.join(channelDir, 'ident');
   const idents = await scanOptionalVideoDirectory(identDir, extensions);
+  const testCardPath = resolveChannelTestCardPath(channelDir);
   const artworkPath = mediaType === 'audio' ? resolveArtworkPath(channelDir, meta) : null;
 
   if (warning) {
@@ -257,6 +263,7 @@ async function scanChannelFolder(channelDir, scanOptions, projectRoot) {
     color: meta.color || 'cyan',
     mediaType,
     artworkPath,
+    testCardPath,
     sourcePath: resolvedSourcePath,
     scanSubfolders,
     maxContentDuration: parseMaxContentDuration(meta.maxContentDuration),

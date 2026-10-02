@@ -24,8 +24,10 @@ let lastScrolledStartsAt = null;
 let scheduleFocusIndex = 0;
 let watchRemoteMounted = false;
 let fullscreenOverlayTimer = null;
+let showingTestPattern = false;
 
 const FULLSCREEN_OVERLAY_MS = 5000;
+const TEST_PATTERN_SLOT_KEY = '__test_pattern__';
 
 if (channelId) {
   sessionStorage.setItem('thebox:lastChannel', channelId);
@@ -36,7 +38,30 @@ function isAudioChannel() {
 }
 
 function getPlayer() {
+  if (showingTestPattern) {
+    return videoPlayer;
+  }
+
   return isAudioChannel() ? audioPlayer : videoPlayer;
+}
+
+function applyTestPatternLayout() {
+  showingTestPattern = true;
+  mediaStage.classList.remove('audio-mode');
+  videoPlayer.hidden = false;
+  audioPlayer.hidden = true;
+  channelArtwork.hidden = true;
+  channelSubtitle.textContent = 'TEST SIGNAL';
+}
+
+function clearTestPatternLayout() {
+  if (!showingTestPattern) {
+    return;
+  }
+
+  showingTestPattern = false;
+  videoPlayer.loop = false;
+  applyChannelMode();
 }
 
 function updateClock() {
@@ -283,9 +308,8 @@ async function loadNowPlaying(advanceFromEnded = false) {
     ]);
 
     let now = nowPlaying;
-    const player = getPlayer();
 
-    if (advanceFromEnded && currentStartsAt && now.startsAt === currentStartsAt) {
+    if (advanceFromEnded && !now.isTestPattern && currentStartsAt && now.startsAt === currentStartsAt) {
       const currentIndex = schedule.slots.findIndex((slot) => slot.startsAt === currentStartsAt);
       if (currentIndex >= 0 && currentIndex < schedule.slots.length - 1) {
         const next = schedule.slots[currentIndex + 1];
@@ -301,30 +325,58 @@ async function loadNowPlaying(advanceFromEnded = false) {
 
     channelName.textContent = now.channelName;
     nowTitle.textContent = now.title;
-    nowTimes.textContent = `${TheBox.formatClock(now.startsAt)} - ${TheBox.formatClock(now.endsAt)}`;
-    statusText.textContent = 'ON AIR';
 
-    const sourceChanged = currentMediaUrl !== now.mediaUrl;
-    const slotChanged = currentStartsAt !== now.startsAt;
+    if (now.isTestPattern) {
+      applyTestPatternLayout();
+      nowTimes.textContent = 'STANDBY · NO PROGRAMME';
+      statusText.textContent = 'TEST SIGNAL';
 
-    if (sourceChanged) {
-      currentMediaUrl = now.mediaUrl;
-      player.src = now.mediaUrl;
-    }
+      const sourceChanged = currentMediaUrl !== now.mediaUrl;
+      const slotChanged = currentStartsAt !== TEST_PATTERN_SLOT_KEY;
+      const player = videoPlayer;
+      videoPlayer.loop = true;
 
-    if (sourceChanged || slotChanged) {
-      currentStartsAt = now.startsAt;
-      const seekTo = now.offsetSeconds || 0;
-      player.currentTime = seekTo;
-      await player.play().catch(() => {});
-    }
+      if (sourceChanged) {
+        currentMediaUrl = now.mediaUrl;
+        player.src = now.mediaUrl;
+      }
 
-    if (now.isAd || now.isIdent) {
+      if (sourceChanged || slotChanged) {
+        currentStartsAt = TEST_PATTERN_SLOT_KEY;
+        player.currentTime = 0;
+        await player.play().catch(() => {});
+      }
+
       currentStopOffsetSeconds = null;
-    } else if (Number.isFinite(now.stopOffsetSeconds)) {
-      currentStopOffsetSeconds = now.stopOffsetSeconds;
     } else {
-      currentStopOffsetSeconds = null;
+      clearTestPatternLayout();
+      const player = getPlayer();
+
+      nowTimes.textContent = `${TheBox.formatClock(now.startsAt)} - ${TheBox.formatClock(now.endsAt)}`;
+      statusText.textContent = 'ON AIR';
+
+      const sourceChanged = currentMediaUrl !== now.mediaUrl;
+      const slotChanged = currentStartsAt !== now.startsAt;
+
+      if (sourceChanged) {
+        currentMediaUrl = now.mediaUrl;
+        player.src = now.mediaUrl;
+      }
+
+      if (sourceChanged || slotChanged) {
+        currentStartsAt = now.startsAt;
+        const seekTo = now.offsetSeconds || 0;
+        player.currentTime = seekTo;
+        await player.play().catch(() => {});
+      }
+
+      if (now.isAd || now.isIdent) {
+        currentStopOffsetSeconds = null;
+      } else if (Number.isFinite(now.stopOffsetSeconds)) {
+        currentStopOffsetSeconds = now.stopOffsetSeconds;
+      } else {
+        currentStopOffsetSeconds = null;
+      }
     }
 
     const programmeSlots = schedule.programmes?.length
@@ -358,9 +410,10 @@ async function loadNowPlaying(advanceFromEnded = false) {
       scheduleFocusIndex = nowIndex;
     }
 
-    if (now.startsAt !== lastScrolledStartsAt) {
+    const scrollKey = now.isTestPattern ? TEST_PATTERN_SLOT_KEY : now.startsAt;
+    if (scrollKey !== lastScrolledStartsAt) {
       scrollScheduleToNowPlaying();
-      lastScrolledStartsAt = now.startsAt;
+      lastScrolledStartsAt = scrollKey;
     } else {
       focusScheduleRow(scheduleFocusIndex);
     }
@@ -413,7 +466,7 @@ bindPlayerEvents(videoPlayer);
 bindPlayerEvents(audioPlayer);
 
 videoPlayer.addEventListener('click', () => {
-  if (!isAudioChannel()) {
+  if (showingTestPattern || !isAudioChannel()) {
     toggleWatchFullscreen();
   }
 });

@@ -19,7 +19,7 @@
   ],
   "scanIntervalMinutes": 60,
   "schedule": {
-    "timezone": "Australia/Adelaide",
+    "timezone": "Europe/London",
     "seedBy": "day",
     "hoursToGenerate": 24,
     "defaultStartTime": "00:00",
@@ -30,12 +30,15 @@
     "defaultPage": 100
   },
   "ads": {
-    "enabled": true,
-    "path": "/home/zorin/Videos/ads",
+    "enabled": false,
+    "path": "",
     "breakMinAds": 1,
     "breakMaxAds": 3,
     "intervalMinutes": 15,
     "intervalJitterMinutes": 3,
     "programEndGuardMinutes": 5
+  },
+  "testPattern": {
+    "path": ""
   }
 }

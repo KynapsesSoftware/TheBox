@@ -28,6 +28,9 @@ const DEFAULT_CONFIG = {
     intervalJitterMinutes: 3,
     programEndGuardMinutes: 5,
   },
+  testPattern: {
+    path: '',
+  },
 };
 
 function deepMerge(base, override) {
@@ -46,20 +49,32 @@ function deepMerge(base, override) {
   return result;
 }
 
+const LOCAL_CONFIG_FILENAME = 'config.local.json';
+
+function readJsonFile(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
 function loadConfig(configPath = './config.json') {
   const resolvedPath = path.resolve(configPath);
+  const configDir = path.dirname(resolvedPath);
+  const localConfigPath = path.join(configDir, LOCAL_CONFIG_FILENAME);
 
-  if (!fs.existsSync(resolvedPath)) {
-    return {
-      ...DEFAULT_CONFIG,
-      configPath: resolvedPath,
-    };
+  let merged = { ...DEFAULT_CONFIG };
+
+  if (fs.existsSync(resolvedPath)) {
+    merged = deepMerge(merged, readJsonFile(resolvedPath));
   }
 
-  const userConfig = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
+  const localConfigLoaded = fs.existsSync(localConfigPath);
+  if (localConfigLoaded) {
+    merged = deepMerge(merged, readJsonFile(localConfigPath));
+  }
+
   return {
-    ...deepMerge(DEFAULT_CONFIG, userConfig),
+    ...merged,
     configPath: resolvedPath,
+    localConfigPath: localConfigLoaded ? localConfigPath : null,
   };
 }
 
