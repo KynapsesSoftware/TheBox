@@ -515,6 +515,19 @@ a.guide-cell.channel-name:focus * {
   color: var(--green);
 }
 
+.footer .help p {
+  margin: 0;
+}
+
+.footer .help p + p {
+  margin-top: 0.35rem;
+}
+
+.footer .panel.help {
+  padding: 0.5rem 1rem;
+  line-height: 1.25;
+}
+
 .error {
   color: var(--red);
 }
