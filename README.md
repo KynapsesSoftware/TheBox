@@ -10,7 +10,7 @@ For installation, configuration, remote control, troubleshooting, and more, see 
 
 - Node.js 18 or newer
 - pnpm for installing dependencies (enable with Corepack — see below)
-- FFmpeg is optional — a bundled `ffprobe` is installed when you run `pnpm install`
+- A bundled **ffprobe** is installed when you run `pnpm install`; **FFmpeg** is optional unless you enable [cached transcode](userguide.md#cached-transcode-optional)
 
 ### Enable pnpm
 

@@ -28,6 +28,30 @@ let showingTestPattern = false;
 
 const FULLSCREEN_OVERLAY_MS = 5000;
 const TEST_PATTERN_SLOT_KEY = '__test_pattern__';
+const UNAVAILABLE_MESSAGE = 'PROGRAMME NOT AVAILABLE AT THIS TIME';
+
+function slotTranscodeBlocksPlayback(slot) {
+  const status = slot?.transcodeStatus;
+  if (!status || status === 'native' || status === 'cached') {
+    return false;
+  }
+
+  return true;
+}
+
+function buildUnavailableNowFromSlot(nowBase, slot) {
+  const { mediaUrl, ...rest } = slot;
+  return {
+    ...nowBase,
+    ...rest,
+    title: slot.title,
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+    offsetSeconds: slot.offsetSeconds ?? 0,
+    playbackUnavailable: true,
+    reason: slot.transcodeStatus === 'failed' ? 'transcodeFailed' : 'transcodePending',
+  };
+}
 
 if (channelId) {
   sessionStorage.setItem('thebox:lastChannel', channelId);
@@ -313,20 +337,41 @@ async function loadNowPlaying(advanceFromEnded = false) {
       const currentIndex = schedule.slots.findIndex((slot) => slot.startsAt === currentStartsAt);
       if (currentIndex >= 0 && currentIndex < schedule.slots.length - 1) {
         const next = schedule.slots[currentIndex + 1];
-        now = {
+        const nowBase = {
           channelId: now.channelId,
           channelName: now.channelName,
           mediaType: now.mediaType,
-          ...next,
-          offsetSeconds: next.offsetSeconds ?? 0,
         };
+
+        if (slotTranscodeBlocksPlayback(next)) {
+          now = buildUnavailableNowFromSlot(nowBase, next);
+        } else {
+          now = {
+            ...nowBase,
+            ...next,
+            offsetSeconds: next.offsetSeconds ?? 0,
+          };
+        }
       }
     }
 
     channelName.textContent = now.channelName;
     nowTitle.textContent = now.title;
 
-    if (now.isTestPattern) {
+    if (now.playbackUnavailable) {
+      clearTestPatternLayout();
+      const player = getPlayer();
+      player.removeAttribute('src');
+      player.pause();
+      currentMediaUrl = null;
+      currentStartsAt = now.startsAt;
+      currentStopOffsetSeconds = null;
+
+      channelName.textContent = now.channelName;
+      nowTitle.textContent = UNAVAILABLE_MESSAGE;
+      nowTimes.textContent = `${now.title} · ${TheBox.formatClock(now.startsAt)} - ${TheBox.formatClock(now.endsAt)}`;
+      statusText.textContent = now.reason === 'transcodeFailed' ? 'ENCODE FAILED' : 'NOT AVAILABLE';
+    } else if (now.isTestPattern) {
       applyTestPatternLayout();
       nowTimes.textContent = 'STANDBY · NO PROGRAMME';
       statusText.textContent = 'TEST SIGNAL';

@@ -26,8 +26,9 @@ This guide covers installation, configuration, channel setup, scheduling, the on
 14. [Watching video and full screen](#watching-video-and-full-screen)
 15. [Raspberry Pi and kiosk mode](#raspberry-pi-and-kiosk-mode)
 16. [Video format recommendations](#video-format-recommendations)
-17. [API reference](#api-reference)
-18. [Troubleshooting](#troubleshooting)
+17. [Checking MKV files with ffprobe](#checking-mkv-files-with-ffprobe)
+18. [API reference](#api-reference)
+19. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -140,6 +141,14 @@ Edit `config.json` in the project root:
   },
   "testPattern": {
     "path": ""
+  },
+  "transcode": {
+    "enabled": false,
+    "cachePath": "",
+    "maxConcurrentJobs": 1,
+    "maxHeight": 720,
+    "preset": "veryfast",
+    "scheduleAheadDays": 1
   }
 }
 ```
@@ -168,8 +177,45 @@ Edit `config.json` in the project root:
 | `ads.intervalJitterMinutes` | Random ± minutes applied to each interval |
 | `ads.programEndGuardMinutes` | Defer a break that would start within this many minutes of a programme’s end |
 | `testPattern.path` | Optional global test card: path to a **file** (`testcard.mp4` / `testcard.mkv`) or a **folder** containing one of those names. Used when a channel has no programme on air and no channel-specific test card |
+| `transcode.enabled` | When `true`, non–browser-safe programme files are transcoded to cached H.264/AAC MP4 in the background (**default `false`**) |
+| `transcode.cachePath` | Writable folder for cached MP4s (absolute or relative to the project root). Required when transcode is enabled |
+| `transcode.maxConcurrentJobs` | Maximum simultaneous FFmpeg encodes (use `1` on a Raspberry Pi) |
+| `transcode.maxHeight` | Scale down taller sources (e.g. `720`); `0` keeps full height |
+| `transcode.preset` | FFmpeg x264 preset (`veryfast` is a good default) |
+| `transcode.scheduleAheadDays` | Days of generated schedule used to build the transcode queue (minimum `1`) |
+| `transcode.nativeVideoCodecs` | ffprobe **video** `codec_name` values treated as HTML5-playable for probed files (default `["h264"]`). Add `"hevc"` here if your browsers play HEVC MKV natively |
+| `transcode.nativeAudioCodecs` | ffprobe **audio** `codec_name` values allowed without transcode (default `["aac", "mp3"]`) |
+| `transcode.probeExtensions` | File extensions to ffprobe on scan (default `[".mkv"]`). Other extensions are not probed and are always served from source |
 
 After changing configuration, restart the server or wait for the next automatic scan (if `scanIntervalMinutes` is set).
+
+### Cached transcode (optional)
+
+When **`transcode.enabled`** is `true`, The Box **ffprobe**s programme files whose extension is listed in **`transcode.probeExtensions`** (default **`.mkv`** only). Other extensions such as `.mp4` are not probed and are always served from source.
+
+For each probed file, if the first video stream’s `codec_name` is listed in **`nativeVideoCodecs`** and the first audio stream (if any) is listed in **`nativeAudioCodecs`**, the file is **served from the original path** (no transcode). Otherwise it is transcoded to cached H.264/AAC MP4 when it appears on the schedule. The **daily schedule is unchanged** — if a programme **needs** transcode and the cache is not ready when its slot airs, the watch page shows **“PROGRAMME NOT AVAILABLE AT THIS TIME”** with the scheduled title and times.
+
+Only **programmes that appear on the generated schedule** are queued (not your entire library). The queue prioritises **upcoming** slots so a long encode does not block titles that still have time to finish before they air. Slots that are **already on air** without a cache are skipped until a later repeat or the next day.
+
+**Requirements:** system **FFmpeg** on your `PATH`, or set the **`FFMPEG_PATH`** environment variable. Set **`transcode.cachePath`** to a folder with enough free space (plan roughly 0.5–1× the size of cached sources over time).
+
+Example in **`config.local.json`**:
+
+```json
+{
+  "transcode": {
+    "enabled": true,
+    "cachePath": ".private/transcode-cache",
+    "maxConcurrentJobs": 1,
+    "maxHeight": 720,
+    "scheduleAheadDays": 1,
+    "nativeVideoCodecs": ["h264", "hevc"],
+    "nativeAudioCodecs": ["aac", "mp3"]
+  }
+}
+```
+
+The admin **Schedule inspector** shows per-programme **Transcode** status and an **FFprobe** column (`v:… · a:…`) for probed files, including those that did not require transcode. The summary line lists your configured native codec lists. Use **Rescan** or restart after changing config or adding files. To check a file yourself before it airs, see [Checking MKV files with ffprobe](#checking-mkv-files-with-ffprobe).
 
 ### Local overrides (`config.local.json`)
 
@@ -635,9 +681,97 @@ Create a **systemd** service for the Node server and configure the desktop or wi
 |---|---|
 | **H.264 + AAC in MP4** | Best hardware decode support on Raspberry Pi and browsers |
 | **720p or lower** | Reduces CPU/GPU load on Pi |
-| **Avoid exotic codecs** | No transcoding pipeline; files must play natively in HTML5 `<video>` |
+| **Avoid exotic codecs in MKV** | With [cached transcode](#cached-transcode-optional) enabled, only non–HTML5-safe MKVs are re-encoded; H.264 + AAC/MP3 MKVs play natively |
 
 Supported extensions (configurable): `.mp4`, `.mkv`, `.webm`, `.mov`
+
+---
+
+## Checking MKV files with ffprobe
+
+When [cached transcode](#cached-transcode-optional) is enabled, The Box only probes **`.mkv`** programme files. It uses the same **ffprobe** binary as duration scanning (bundled after `pnpm install`, or a system install from the **FFmpeg** package). You can run the same check on any MKV on disk to see whether The Box will **transcode** it or **play it natively**.
+
+### Command (matches the server)
+
+```bash
+ffprobe -v error \
+  -show_entries stream=codec_type,codec_name \
+  -show_entries format=format_name \
+  -of json \
+  "/path/to/your/file.mkv"
+```
+
+If `ffprobe` is not on your shell `PATH`, use the bundled binary from the project root (platform name may differ):
+
+```bash
+node -e "console.log(require('@ffprobe-installer/ffprobe').path)"
+```
+
+Run that path in place of `ffprobe` in the command above.
+
+### How to read the result
+
+Look at the **`streams`** array in the JSON output:
+
+1. Find the first stream with `"codec_type": "video"` — note **`codec_name`**.
+2. Find the first stream with `"codec_type": "audio"` — note **`codec_name`** (some files have no audio stream).
+
+The Box compares ffprobe results to **`transcode.nativeVideoCodecs`** and **`transcode.nativeAudioCodecs`** in config (defaults below). Codec names are matched case-insensitively against ffprobe’s `codec_name` values.
+
+**Default native lists:** video `h264` · audio `aac`, `mp3`
+
+| Video `codec_name` | Audio `codec_name` (if present) | Transcode with defaults? |
+|---|---|---|
+| in `nativeVideoCodecs` (e.g. `h264`) | in `nativeAudioCodecs` or absent | **No** — original file is streamed |
+| in `nativeVideoCodecs` | not in list (e.g. `ac3`, `dts`) | **Yes** |
+| not in list (e.g. `hevc`, `mpeg2video`, `vp9`) | any | **Yes** (add e.g. `hevc` to `nativeVideoCodecs` if your setup plays it) |
+
+Extensions not listed in **`transcode.probeExtensions`** (e.g. `.mp4` with defaults) are **not** probed; they are always served from source.
+
+If ffprobe **fails** on a file (corrupt path, unreadable file), the server treats that MKV as **needs transcode** until probe succeeds on a later rescan.
+
+### Example: no transcode
+
+```json
+{
+  "streams": [
+    { "codec_type": "video", "codec_name": "h264" },
+    { "codec_type": "audio", "codec_name": "aac" }
+  ],
+  "format": { "format_name": "matroska,webm" }
+}
+```
+
+**Result:** play natively — no queue entry for this file.
+
+### Example: transcode required
+
+```json
+{
+  "streams": [
+    { "codec_type": "video", "codec_name": "hevc" },
+    { "codec_type": "audio", "codec_name": "aac" }
+  ],
+  "format": { "format_name": "matroska,webm" }
+}
+```
+
+**Result:** with default config, HEVC is not in `nativeVideoCodecs` — file will be transcoded when it appears on the schedule. Add `"hevc"` to `nativeVideoCodecs` in `config.local.json` if your browser already plays this file without transcode.
+
+### Multiple audio tracks
+
+The server uses the **first** audio stream ffprobe lists. If the default track is DTS but a later track is AAC, The Box may still mark the file for transcode. Remuxing to a single AAC track (or reordering streams) avoids unnecessary encodes.
+
+### Quick human-readable summary
+
+Without JSON, print the first video and first audio codec names:
+
+```bash
+ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "/path/to/your/file.mkv"
+ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "/path/to/your/file.mkv"
+```
+
+You should see `h264` for video and `aac` or `mp3` for audio when no transcode is needed (the second command may print nothing if the file has no audio).
 
 ---
 

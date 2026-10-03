@@ -15,6 +15,7 @@ const {
   resolveConfiguredTestPatternPath,
   resolveEffectiveTestCardPath,
 } = require('./testPattern');
+const { createTranscodeService, findVideoByFilename } = require('./transcode');
 
 const config = loadConfig();
 const projectRoot = path.dirname(config.configPath);
@@ -26,6 +27,7 @@ let channels = [];
 let adsLibrary = null;
 let globalTestCardPath = null;
 let scanTimer = null;
+const transcodeService = createTranscodeService(config, projectRoot);
 
 function getChannelById(channelId) {
   return channels.find((channel) => channel.id === channelId);
@@ -72,6 +74,30 @@ function countUnplayableMedia(channelList) {
   }, 0);
 }
 
+function applyTranscodeToNowPlaying(channel, current) {
+  if (!current || current.isTestPattern || current.isAd || current.isIdent) {
+    return current;
+  }
+
+  if (!transcodeService.enabled) {
+    return current;
+  }
+
+  const video = findVideoByFilename(channel, current.filename);
+  if (!video?.needsTranscode || transcodeService.canPlayVideo(video)) {
+    return current;
+  }
+
+  const status = transcodeService.getStatusForVideo(video);
+  const { mediaUrl, ...rest } = current;
+
+  return {
+    ...rest,
+    playbackUnavailable: true,
+    reason: status === 'failed' ? 'transcodeFailed' : 'transcodePending',
+  };
+}
+
 async function refreshChannels() {
   channels = await scanChannels(channelsRoot, {
     videoExtensions: config.videoExtensions,
@@ -79,6 +105,13 @@ async function refreshChannels() {
   }, projectRoot);
   adsLibrary = await loadAdsLibrary(config);
   globalTestCardPath = resolveConfiguredTestPatternPath(config.testPattern?.path, projectRoot);
+
+  for (const channel of channels) {
+    await transcodeService.enrichChannelVideos(channel);
+  }
+
+  transcodeService.refreshQueue(channels, scheduleOptions);
+
   const mediaCount = channels.reduce((sum, channel) => sum + channel.videos.length, 0);
   const unplayableCount = countUnplayableMedia(channels);
 
@@ -141,15 +174,17 @@ app.get('/api/channels/:id/schedule', (req, res) => {
     : new Date();
 
   const schedule = generateChannelSchedule(channel, scheduleOptions(date));
+  const withTranscode = transcodeService.attachScheduleMeta(schedule, channel);
 
   res.json({
-    ...schedule,
+    ...withTranscode,
     meta: {
       timezone: config.schedule.timezone,
       adsLibraryActive: adsLibrary?.active === true,
       channelAdsEnabled: channel.adsEnabled === true,
       identInterval: channel.identInterval ?? 0,
       identCount: channel.idents.length,
+      ...(withTranscode.meta || {}),
     },
   });
 });
@@ -193,7 +228,7 @@ app.get('/api/channels/:id/now', (req, res) => {
     return;
   }
 
-  res.json({
+  const payload = applyTranscodeToNowPlaying(channel, {
     channelId: channel.id,
     channelName: channel.displayName,
     mediaType: channel.mediaType || 'video',
@@ -202,6 +237,8 @@ app.get('/api/channels/:id/now', (req, res) => {
     startsAt: current.displayStartsAt || current.startsAt,
     endsAt: current.displayEndsAt || current.endsAt,
   });
+
+  res.json(payload);
 });
 
 app.get('/api/channels/:id/artwork', (req, res) => {
@@ -234,14 +271,28 @@ app.get('/media/ads/*', createAdMediaHandler(() => adsLibrary));
 app.get('/media/testcard/global', createGlobalTestCardHandler(() => globalTestCardPath));
 app.get('/media/:channelId/testcard', createChannelTestCardHandler(getChannelById));
 app.get('/media/:channelId/ident/*', createMediaHandler(getChannelById, 'ident'));
-app.get('/media/:channelId/*', createMediaHandler(getChannelById));
+app.get(
+  '/media/:channelId/*',
+  createMediaHandler(getChannelById, 'video', (video) => transcodeService.resolvePlaybackPath(video)),
+);
 
 app.get('*', (_req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 async function start() {
+  if (transcodeService.settings.enabled) {
+    if (transcodeService.enabled) {
+      console.log(`Transcode enabled; cache: ${transcodeService.cacheDir}`);
+    } else if (!transcodeService.settings.cachePath) {
+      console.warn('Transcode enabled in config but cachePath is empty — transcode is inactive.');
+    } else if (!transcodeService.ffmpegStatus.ok) {
+      console.warn(`Transcode enabled but FFmpeg unavailable: ${transcodeService.ffmpegStatus.error}`);
+    }
+  }
+
   await refreshChannels();
+  transcodeService.startDayRolloverWatch(scheduleOptions, () => channels);
 
   if (config.scanIntervalMinutes > 0) {
     scanTimer = setInterval(refreshChannels, config.scanIntervalMinutes * 60 * 1000);
@@ -271,6 +322,11 @@ process.on('SIGINT', () => {
   if (scanTimer) {
     clearInterval(scanTimer);
   }
+
+  if (transcodeService.dayCheckTimer) {
+    clearInterval(transcodeService.dayCheckTimer);
+  }
+
   process.exit(0);
 });
 

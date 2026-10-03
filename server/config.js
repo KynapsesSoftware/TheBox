@@ -31,6 +31,19 @@ const DEFAULT_CONFIG = {
   testPattern: {
     path: '',
   },
+  transcode: {
+    enabled: false,
+    cachePath: '',
+    maxConcurrentJobs: 1,
+    videoCodec: 'h264',
+    audioCodec: 'aac',
+    maxHeight: 720,
+    preset: 'veryfast',
+    scheduleAheadDays: 1,
+    nativeVideoCodecs: ['h264'],
+    nativeAudioCodecs: ['aac', 'mp3'],
+    probeExtensions: ['.mkv'],
+  },
 };
 
 function deepMerge(base, override) {

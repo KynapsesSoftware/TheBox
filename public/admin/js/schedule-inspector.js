@@ -21,6 +21,45 @@ function todayDateInputValue() {
   return `${year}-${month}-${day}`;
 }
 
+const TRANSCODE_LABELS = {
+  native: 'Native',
+  cached: 'Cached',
+  required: 'Transcode required',
+  queued: 'Queued',
+  inProgress: 'In progress',
+  skipped: 'Skipped (on air)',
+  failed: 'Failed',
+};
+
+function describeTranscodeStatus(slot) {
+  if (slot.isAd || slot.isIdent || !slot.transcodeStatus) {
+    return '—';
+  }
+
+  return TRANSCODE_LABELS[slot.transcodeStatus] || slot.transcodeStatus;
+}
+
+function formatFfprobeCell(slot) {
+  const probe = slot.transcodeProbe;
+  if (slot.isAd || slot.isIdent || !probe) {
+    return { text: '—', title: '' };
+  }
+
+  if (probe.probeError) {
+    return { text: 'probe error', title: probe.probeError };
+  }
+
+  const video = probe.videoCodec || '?';
+  const audio = probe.audioCodec == null ? '(no audio)' : probe.audioCodec;
+  const format = probe.formatName ? ` · ${probe.formatName}` : '';
+  const verdict = probe.needsTranscode ? ' · transcode' : ' · native OK';
+
+  return {
+    text: `v:${video} · a:${audio}`,
+    title: `ffprobe${format}${verdict}`,
+  };
+}
+
 function describeSlot(slot) {
   if (slot.isIdent) {
     return { label: 'Ident', className: 'slot-ident' };
@@ -105,11 +144,30 @@ function buildSummary(schedule) {
     ? `Idents every ${meta.identInterval} programme(s) · ${meta.identCount} file(s)`
     : 'Idents off';
 
-  return [
+  const lines = [
     `Date ${schedule.date} · ${meta.timezone || '—'} · window ${schedule.startTime}–${schedule.endTime}`,
     `${slots.length} playback slots (${counts.programme} programme, ${counts.part} part, ${counts.ad} ad, ${counts.ident} ident) · ${programmes.length} on-air rows`,
     `${adsNote} · ${identNote}`,
-  ].join(' · ');
+  ];
+
+  if (meta.transcodeEnabled && meta.transcodeCounts) {
+    const tc = meta.transcodeCounts;
+    lines.push(
+      `Transcode: ${tc.cached || 0} cached, ${tc.native || 0} native, `
+      + `${(tc.required || 0) + (tc.queued || 0) + (tc.inProgress || 0)} pending, `
+      + `${tc.skipped || 0} skipped, ${tc.failed || 0} failed`,
+    );
+  }
+
+  if (meta.transcodeNativeVideoCodecs?.length) {
+    const ext = (meta.transcodeProbeExtensions || []).join(', ') || '—';
+    lines.push(
+      `Native codecs (config): video ${meta.transcodeNativeVideoCodecs.join(', ')} · `
+      + `audio ${(meta.transcodeNativeAudioCodecs || []).join(', ')} · probe ${ext}`,
+    );
+  }
+
+  return lines.join(' · ');
 }
 
 function renderSchedule(schedule) {
@@ -138,6 +196,8 @@ function renderSchedule(schedule) {
         <th>End</th>
         <th>Type</th>
         <th>Title</th>
+        <th>Transcode</th>
+        <th>FFprobe</th>
         <th>Details</th>
       </tr>
     </thead>
@@ -154,12 +214,16 @@ function renderSchedule(schedule) {
       row.classList.add('slot-now');
     }
 
+    const ffprobe = formatFfprobeCell(slot);
+
     row.innerHTML = `
       <td class="col-num">${index + 1}</td>
       <td class="col-time">${TheBox.formatClock(slot.startsAt)}</td>
       <td class="col-time">${TheBox.formatClock(slot.endsAt)}</td>
       <td class="col-type">${label}</td>
       <td>${slot.title}</td>
+      <td class="col-type">${describeTranscodeStatus(slot)}</td>
+      <td class="col-details" title="${ffprobe.title.replace(/"/g, '&quot;')}">${ffprobe.text}</td>
       <td class="col-details">${formatOffsetRange(slot)}</td>
     `;
     tbody.appendChild(row);
