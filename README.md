@@ -36,7 +36,7 @@ pnpm start
 
 Open [http://localhost:8080](http://localhost:8080).
 
-Admin tools (schedule inspector, rescan UI) live at [http://localhost:8080/admin/](http://localhost:8080/admin/) — separate from the Ceefax viewer. See the [User Guide — Admin tools](userguide.md#admin-tools).
+Admin tools (schedule inspector, **Channels** and transcode lookup in database mode, rescan) live at [http://localhost:8080/admin/](http://localhost:8080/admin/) — separate from the Ceefax viewer. See the [User Guide — Admin tools](userguide.md#admin-tools).
 
 ## Configuration
 
@@ -70,16 +70,24 @@ Example `config.json`:
   },
   "testPattern": {
     "path": ""
+  },
+  "library": {
+    "mode": "filesystem",
+    "databasePath": "",
+    "startupScan": "if-empty",
+    "rescanOnStartup": false
   }
 }
 ```
 
-Set `"adsEnabled": true` in a video channel’s `channel.json` to opt in when global ads are enabled. See the [User Guide](userguide.md) for details.
+Set `"adsEnabled": true` in a video channel’s `channel.json` to opt in when global ads are enabled.
+
+For a **SQLite-backed catalogue** (faster restarts, admin channel editor, cached schedules), set `"library.mode": "database"` and `"library.databasePath": "database/thebox.db"` in **`config.local.json`**. See the [User Guide — SQLite catalogue](userguide.md#sqlite-catalogue-database-mode) and [Admin tools](userguide.md#admin-tools).
 
 ## Adding channels
 
 1. Create a folder under `channels/`, for example `channels/classic-films/`
-2. Add video files to that folder, or set `sourcePath` in `channel.json` to an external folder
+2. Add video files to that folder, or set `sourcePath` (one folder) or `sourcePaths` (array) in `channel.json` for external libraries
 3. Optionally add `channel.json`:
 
 ```json
@@ -98,9 +106,11 @@ Set `"adsEnabled": true` in a video channel’s `channel.json` to opt in when gl
 }
 ```
 
-`sourcePath` is optional. Use an absolute path or a path relative to the project folder when videos live outside `channels/`. A trailing slash is optional.
+`sourcePath` is optional for a **single** external folder (filenames stay unprefixed). Use **`sourcePaths`** as a JSON array when programmes live in **multiple** folders; each root gets a basename slug prefix (`comedy/…`, `drama/…`) with `-2`, `-3` suffixes if basenames collide. Paths can be absolute or relative to the project folder.
 
-Set `scanSubfolders` to `true` to include videos from subfolders when scanning a channel or `sourcePath`.
+Set `scanSubfolders` to `true` to include videos from subfolders when scanning the channel folder or external source(s).
+
+See the [User Guide — Channel setting reference](userguide.md#channel-setting-reference) for details.
 
 Set `mediaType` to `audio` for audio-only channels. Add artwork (e.g. `artwork.png`) to the channel folder for the watch page display.
 

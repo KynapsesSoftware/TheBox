@@ -300,6 +300,10 @@ function resolveNowPlaying(schedule, now = new Date()) {
   return enrichNowPlaying(schedule, current);
 }
 
+function scheduleSeedForChannelDay(channelId, dateKey) {
+  return hashSeed(`${channelId}:${dateKey}`);
+}
+
 module.exports = {
   generateChannelSchedule,
   generateGuide,
@@ -307,5 +311,6 @@ module.exports = {
   resolveNowPlaying,
   getDateKey,
   resolveChannelWindow,
+  scheduleSeedForChannelDay,
   timeOnDateMs,
 };

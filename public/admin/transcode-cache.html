@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box — Transcode cache lookup</title>
+    <link rel="stylesheet" href="/admin/css/admin.css" />
+  </head>
+  <body class="admin-app">
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <div class="admin-brand">
+          The Box
+          <span>Admin tools</span>
+        </div>
+        <nav id="admin-nav" class="admin-nav" aria-label="Admin navigation"></nav>
+        <div class="admin-sidebar-footer">
+          <a href="/">← Back to TV UI</a>
+        </div>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <h1>Transcode cache lookup</h1>
+          <span id="status-text" class="admin-status"></span>
+        </header>
+
+        <div class="admin-content">
+          <section class="admin-card">
+            <p class="admin-summary">
+              Paste a cache filename (e.g. <code>a1b2…f9.mp4</code> or the hash alone) to find the matching programme in
+              <code>media_files</code> and any encode record.
+            </p>
+
+            <div class="admin-controls">
+              <div class="admin-field" style="flex: 1; min-width: 280px;">
+                <label for="cache-input">Cache key / filename</label>
+                <input id="cache-input" class="admin-input" type="text" placeholder="64-char hash or hash.mp4" spellcheck="false" />
+              </div>
+              <button id="lookup-btn" type="button" class="admin-btn">Look up</button>
+            </div>
+
+            <pre id="result-json" class="admin-code-block" hidden></pre>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/admin/js/admin-common.js"></script>
+    <script src="/admin/js/transcode-cache.js"></script>
+  </body>
+</html>

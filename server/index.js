@@ -1,9 +1,9 @@
 const express = require('express');
 const path = require('path');
 const { loadConfig, resolveChannelsRoot } = require('./config');
-const { scanChannels } = require('./scanner');
+const { createChannelRepository } = require('./library');
 const { loadAdsLibrary } = require('./ads');
-const { generateChannelSchedule, generateGuide, resolveNowPlaying, getDateKey } = require('./scheduler');
+const { resolveNowPlaying, getDateKey } = require('./scheduler');
 const {
   createAdMediaHandler,
   createChannelTestCardHandler,
@@ -16,6 +16,17 @@ const {
   resolveEffectiveTestCardPath,
 } = require('./testPattern');
 const { createTranscodeService, findVideoByFilename } = require('./transcode');
+const {
+  createAdminChannel,
+  deleteAdminChannel,
+  getAdminChannel,
+  listAdminChannels,
+  updateAdminChannel,
+} = require('./library/adminChannels');
+const {
+  lookupTranscodeCache,
+  upsertTranscodeCacheEntry,
+} = require('./library/transcodeCacheDb');
 
 const config = loadConfig();
 const projectRoot = path.dirname(config.configPath);
@@ -28,6 +39,43 @@ let adsLibrary = null;
 let globalTestCardPath = null;
 let scanTimer = null;
 const transcodeService = createTranscodeService(config, projectRoot);
+const libraryRuntime = createChannelRepository(config, { projectRoot, channelsRoot });
+
+if (libraryRuntime.dbConnection?.db) {
+  transcodeService.onTranscodeComplete = (info) => {
+    upsertTranscodeCacheEntry(libraryRuntime.dbConnection.db, {
+      cache_key: info.cacheKey,
+      channel_id: info.channelId,
+      filename: info.filename,
+      source_path: info.sourcePath,
+      ffmpeg_exit_note: info.note,
+    });
+  };
+}
+const channelRepository = libraryRuntime.repository;
+const scheduleService = libraryRuntime.scheduleService;
+const mediaCatalogue = libraryRuntime.mediaCatalogue;
+
+function resolveProgrammeVideo(channel, filename) {
+  if (mediaCatalogue) {
+    return mediaCatalogue.getProgramme(channel.id, filename);
+  }
+
+  return findVideoByFilename(channel, filename);
+}
+
+function programmeCount(channel) {
+  return channel.programmeCount ?? channel.videos.length;
+}
+
+function identCount(channel) {
+  return channel.identCount ?? channel.idents.length;
+}
+
+function scheduleAheadDays() {
+  const days = Number(config.transcode?.scheduleAheadDays);
+  return Number.isFinite(days) && days >= 1 ? days : 1;
+}
 
 function getChannelById(channelId) {
   return channels.find((channel) => channel.id === channelId);
@@ -42,18 +90,21 @@ function serializeChannel(channel) {
     mediaType: channel.mediaType || 'video',
     artworkUrl: channel.artworkPath ? `/api/channels/${encodeURIComponent(channel.id)}/artwork` : null,
     sourcePath: channel.sourcePath || null,
+    sourcePaths: channel.sourcePaths?.length ? channel.sourcePaths : null,
     maxContentDuration: channel.maxContentDuration ?? null,
     identInterval: channel.identInterval ?? 0,
     adsEnabled: channel.adsEnabled === true,
     scanSubfolders: channel.scanSubfolders ?? false,
     schedule: channel.schedule,
-    videoCount: channel.videos.length,
-    identCount: channel.idents.length,
+    videoCount: programmeCount(channel),
+    programmeCount: programmeCount(channel),
+    identCount: identCount(channel),
     hasTestCard: Boolean(channel.testCardPath || globalTestCardPath),
-    totalDurationSeconds: channel.videos.reduce(
+    totalDurationSeconds: channel.totalDurationSeconds ?? channel.videos.reduce(
       (sum, video) => sum + (video.durationSeconds || 0),
       0,
     ),
+    catalogueInDb: channel.catalogueInDb === true,
   };
 }
 
@@ -70,6 +121,10 @@ function scheduleOptions(date = new Date()) {
 
 function countUnplayableMedia(channelList) {
   return channelList.reduce((count, channel) => {
+    if (channel.catalogueInDb) {
+      return count + (channel.unplayableProgrammeCount || 0);
+    }
+
     return count + channel.videos.filter((video) => !video.durationSeconds).length;
   }, 0);
 }
@@ -83,7 +138,7 @@ function applyTranscodeToNowPlaying(channel, current) {
     return current;
   }
 
-  const video = findVideoByFilename(channel, current.filename);
+  const video = resolveProgrammeVideo(channel, current.filename);
   if (!video?.needsTranscode || transcodeService.canPlayVideo(video)) {
     return current;
   }
@@ -98,24 +153,94 @@ function applyTranscodeToNowPlaying(channel, current) {
   };
 }
 
-async function refreshChannels() {
-  channels = await scanChannels(channelsRoot, {
-    videoExtensions: config.videoExtensions,
-    audioExtensions: config.audioExtensions,
-  }, projectRoot);
+function requireDatabaseAdmin(_req, res, next) {
+  if (channelRepository.mode !== 'database' || !libraryRuntime.dbConnection?.db) {
+    res.status(503).json({
+      error: 'Admin channel management requires library.mode "database" and library.databasePath',
+    });
+    return;
+  }
+
+  next();
+}
+
+async function reloadRuntimeChannels() {
+  channels = await channelRepository.rescanAll({});
+}
+
+function refreshTranscodeQueueOnly() {
+  transcodeService.refreshQueue(
+    channels,
+    scheduleOptions,
+    (channel, scheduleOpts) => scheduleService.getSchedule(channel, scheduleOpts),
+    resolveProgrammeVideo,
+  );
+}
+
+async function rebuildSchedulesForRuntime(channelId = null) {
+  if (!scheduleService.enabled) {
+    refreshTranscodeQueueOnly();
+    return;
+  }
+
+  if (channelId) {
+    const channel = getChannelById(channelId);
+    if (channel) {
+      scheduleService.rebuildChannel(channel, scheduleOptions, scheduleAheadDays());
+    }
+  } else {
+    scheduleService.invalidateAll();
+    scheduleService.ensureAhead(
+      channels,
+      scheduleOptions,
+      scheduleAheadDays(),
+      { force: true },
+    );
+  }
+
+  refreshTranscodeQueueOnly();
+}
+
+async function refreshChannels(options = {}) {
+  const forceReconcile = options.forceReconcile === true;
+  const rescanOnStartup = options.rescanOnStartup === true;
+  channels = await channelRepository.rescanAll({ forceReconcile, rescanOnStartup });
   adsLibrary = await loadAdsLibrary(config);
   globalTestCardPath = resolveConfiguredTestPatternPath(config.testPattern?.path, projectRoot);
 
-  for (const channel of channels) {
-    await transcodeService.enrichChannelVideos(channel);
+  if (!mediaCatalogue) {
+    for (const channel of channels) {
+      await transcodeService.enrichChannelVideos(channel);
+    }
   }
 
-  transcodeService.refreshQueue(channels, scheduleOptions);
+  const rebuildSchedules = forceReconcile || rescanOnStartup;
 
-  const mediaCount = channels.reduce((sum, channel) => sum + channel.videos.length, 0);
+  if (scheduleService.enabled) {
+    if (rebuildSchedules) {
+      scheduleService.invalidateAll();
+    }
+
+    scheduleService.ensureAhead(
+      channels,
+      scheduleOptions,
+      scheduleAheadDays(),
+      { force: rebuildSchedules },
+    );
+  }
+
+  transcodeService.refreshQueue(
+    channels,
+    scheduleOptions,
+    (channel, scheduleOpts) => scheduleService.getSchedule(channel, scheduleOpts),
+    resolveProgrammeVideo,
+  );
+
+  const mediaCount = channels.reduce((sum, channel) => sum + programmeCount(channel), 0);
   const unplayableCount = countUnplayableMedia(channels);
 
-  console.log(`Scanned ${channels.length} channel(s), ${mediaCount} programme(s) from ${channelsRoot}`);
+  const libraryLabel = channelRepository.mode === 'database' ? 'library database' : channelsRoot;
+  console.log(`Loaded ${channels.length} channel(s), ${mediaCount} programme(s) from ${libraryLabel}`);
   if (adsLibrary.active) {
     console.log(`Loaded ${adsLibrary.ads.length} ad(s) from ${adsLibrary.config.path}`);
   }
@@ -138,6 +263,12 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     channels: channels.length,
     channelsRoot,
+    library: {
+      mode: channelRepository.mode,
+      databasePath: libraryRuntime.dbConnection?.path || null,
+      schedulesCached: scheduleService.enabled,
+      slimCatalogue: Boolean(mediaCatalogue),
+    },
   });
 });
 
@@ -152,14 +283,28 @@ app.get('/api/channels/:id', (req, res) => {
     return;
   }
 
-  res.json({
-    ...serializeChannel(channel),
-    videos: channel.videos.map((video) => ({
+  const payload = { ...serializeChannel(channel) };
+
+  if (mediaCatalogue) {
+    const listVideos = req.query.videos === '1' || req.query.videos === 'true';
+    const limit = Number.parseInt(req.query.limit, 10);
+    const offset = Number.parseInt(req.query.offset, 10) || 0;
+
+    if (listVideos || Number.isFinite(limit)) {
+      payload.videos = mediaCatalogue.listProgrammeSummaries(channel.id, {
+        limit: Number.isFinite(limit) ? limit : 100,
+        offset,
+      });
+    }
+  } else {
+    payload.videos = channel.videos.map((video) => ({
       filename: video.filename,
       title: video.title,
       durationSeconds: video.durationSeconds,
-    })),
-  });
+    }));
+  }
+
+  res.json(payload);
 });
 
 app.get('/api/channels/:id/schedule', (req, res) => {
@@ -173,8 +318,12 @@ app.get('/api/channels/:id/schedule', (req, res) => {
     ? new Date(`${req.query.date}T12:00:00.000Z`)
     : new Date();
 
-  const schedule = generateChannelSchedule(channel, scheduleOptions(date));
-  const withTranscode = transcodeService.attachScheduleMeta(schedule, channel);
+  const schedule = scheduleService.getSchedule(channel, scheduleOptions(date));
+  const withTranscode = transcodeService.attachScheduleMeta(
+    schedule,
+    channel,
+    resolveProgrammeVideo,
+  );
 
   res.json({
     ...withTranscode,
@@ -183,7 +332,7 @@ app.get('/api/channels/:id/schedule', (req, res) => {
       adsLibraryActive: adsLibrary?.active === true,
       channelAdsEnabled: channel.adsEnabled === true,
       identInterval: channel.identInterval ?? 0,
-      identCount: channel.idents.length,
+      identCount: identCount(channel),
       ...(withTranscode.meta || {}),
     },
   });
@@ -196,7 +345,7 @@ app.get('/api/channels/:id/now', (req, res) => {
     return;
   }
 
-  const schedule = generateChannelSchedule(channel, scheduleOptions());
+  const schedule = scheduleService.getSchedule(channel, scheduleOptions());
   const current = resolveNowPlaying(schedule);
 
   if (!current) {
@@ -206,9 +355,11 @@ app.get('/api/channels/:id/now', (req, res) => {
       return;
     }
 
-    const unplayableCount = channel.videos.filter((video) => !video.durationSeconds).length;
+    const unplayableCount = channel.catalogueInDb
+      ? (channel.unplayableProgrammeCount || 0)
+      : channel.videos.filter((video) => !video.durationSeconds).length;
 
-    if (channel.videos.length === 0) {
+    if (programmeCount(channel) === 0) {
       res.status(404).json({
         error: channel.mediaType === 'audio'
           ? 'This channel has no audio files'
@@ -217,7 +368,7 @@ app.get('/api/channels/:id/now', (req, res) => {
       return;
     }
 
-    if (unplayableCount === channel.videos.length) {
+    if (unplayableCount === programmeCount(channel)) {
       res.status(503).json({
         error: 'Media durations could not be read. Restart the server after checking ffprobe.',
       });
@@ -258,22 +409,179 @@ app.get('/api/guide', (req, res) => {
 
   res.json({
     date: getDateKey(date, config.schedule.timezone),
-    channels: generateGuide(channels, scheduleOptions(date)),
+    channels: scheduleService.generateGuide(channels, scheduleOptions(date)),
   });
 });
 
+app.get('/api/admin/library', requireDatabaseAdmin, (_req, res) => {
+  res.json({
+    mode: channelRepository.mode,
+    databasePath: libraryRuntime.dbConnection.path,
+    channelsRoot,
+    schedulesCached: scheduleService.enabled,
+    slimCatalogue: Boolean(mediaCatalogue),
+  });
+});
+
+app.get('/api/admin/channels', requireDatabaseAdmin, (_req, res) => {
+  const db = libraryRuntime.dbConnection.db;
+  res.json({ channels: listAdminChannels(db) });
+});
+
+app.get('/api/admin/channels/:id', requireDatabaseAdmin, (req, res) => {
+  const channel = getAdminChannel(libraryRuntime.dbConnection.db, req.params.id);
+  if (!channel) {
+    res.status(404).json({ error: 'Channel not found' });
+    return;
+  }
+
+  res.json(channel);
+});
+
+app.post('/api/admin/channels', requireDatabaseAdmin, async (req, res) => {
+  const result = createAdminChannel(
+    libraryRuntime.dbConnection.db,
+    req.body || {},
+    projectRoot,
+  );
+
+  if (!result.ok) {
+    res.status(400).json({ error: 'Validation failed', details: result.errors });
+    return;
+  }
+
+  await reloadRuntimeChannels();
+
+  if (channelRepository.reconcileOneChannel) {
+    await channelRepository.reconcileOneChannel(result.channel.id);
+    channels = channelRepository.getChannels();
+  }
+
+  await rebuildSchedulesForRuntime(result.channel.id);
+  res.status(201).json(result.channel);
+});
+
+app.put('/api/admin/channels/:id', requireDatabaseAdmin, async (req, res) => {
+  const channelId = req.params.id;
+  const result = updateAdminChannel(
+    libraryRuntime.dbConnection.db,
+    channelId,
+    req.body || {},
+    projectRoot,
+  );
+
+  if (!result.ok) {
+    const status = result.errors.includes('Channel not found') ? 404 : 400;
+    res.status(status).json({ error: 'Update failed', details: result.errors });
+    return;
+  }
+
+  if (result.pathsAffectingMedia && channelRepository.reconcileOneChannel) {
+    await channelRepository.reconcileOneChannel(channelId);
+    channels = channelRepository.getChannels();
+  } else {
+    await reloadRuntimeChannels();
+  }
+
+  if (result.scheduleAffecting || result.pathsAffectingMedia) {
+    await rebuildSchedulesForRuntime(channelId);
+  } else {
+    refreshTranscodeQueueOnly();
+  }
+
+  res.json(result.channel);
+});
+
+app.delete('/api/admin/channels/:id', requireDatabaseAdmin, async (req, res) => {
+  const result = deleteAdminChannel(libraryRuntime.dbConnection.db, req.params.id);
+  if (!result.ok) {
+    res.status(404).json({ error: 'Delete failed', details: result.errors });
+    return;
+  }
+
+  await reloadRuntimeChannels();
+  refreshTranscodeQueueOnly();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/channels/:id/rescan', requireDatabaseAdmin, async (req, res) => {
+  if (!channelRepository.reconcileOneChannel) {
+    res.status(503).json({ error: 'Channel rescan is only available in database mode' });
+    return;
+  }
+
+  const ok = await channelRepository.reconcileOneChannel(req.params.id);
+  if (!ok) {
+    res.status(404).json({ error: 'Channel not found' });
+    return;
+  }
+
+  channels = channelRepository.getChannels();
+  scheduleService.invalidateChannel?.(req.params.id);
+  await rebuildSchedulesForRuntime(req.params.id);
+  res.json({ ok: true, channelId: req.params.id });
+});
+
+app.post('/api/admin/rebuild-schedules', requireDatabaseAdmin, async (req, res) => {
+  const channelId = typeof req.body?.channelId === 'string' ? req.body.channelId : null;
+  await reloadRuntimeChannels();
+  await rebuildSchedulesForRuntime(channelId);
+  res.json({ ok: true, channelId });
+});
+
+app.post('/api/admin/import-from-folders', requireDatabaseAdmin, async (_req, res) => {
+  if (!channelRepository.importFromChannelsRoot) {
+    res.status(503).json({ error: 'Import requires database mode' });
+    return;
+  }
+
+  const imported = await channelRepository.importFromChannelsRoot();
+  channels = channelRepository.getChannels();
+  scheduleService.invalidateAll?.();
+  scheduleService.ensureAhead?.(
+    channels,
+    scheduleOptions,
+    scheduleAheadDays(),
+    { force: true },
+  );
+  refreshTranscodeQueueOnly();
+  res.json({ ok: true, imported, channels: channels.length });
+});
+
+app.get('/api/admin/transcode-cache', requireDatabaseAdmin, (req, res) => {
+  const result = lookupTranscodeCache(libraryRuntime.dbConnection.db, req.query.key || '');
+  if (!result.cacheKey) {
+    res.status(400).json({ error: 'Invalid cache key' });
+    return;
+  }
+
+  res.json(result);
+});
+
 app.post('/api/admin/rescan', async (_req, res) => {
-  await refreshChannels();
+  await refreshChannels({ forceReconcile: true });
   res.json({ ok: true, channels: channels.length });
 });
 
 app.get('/media/ads/*', createAdMediaHandler(() => adsLibrary));
 app.get('/media/testcard/global', createGlobalTestCardHandler(() => globalTestCardPath));
 app.get('/media/:channelId/testcard', createChannelTestCardHandler(getChannelById));
-app.get('/media/:channelId/ident/*', createMediaHandler(getChannelById, 'ident'));
+const resolveMediaItem = mediaCatalogue
+  ? (channel, filename, mediaType) => mediaCatalogue.getMediaItem(channel.id, filename, mediaType)
+  : null;
+
+app.get(
+  '/media/:channelId/ident/*',
+  createMediaHandler(getChannelById, 'ident', null, resolveMediaItem),
+);
 app.get(
   '/media/:channelId/*',
-  createMediaHandler(getChannelById, 'video', (video) => transcodeService.resolvePlaybackPath(video)),
+  createMediaHandler(
+    getChannelById,
+    'video',
+    (video) => transcodeService.resolvePlaybackPath(video),
+    resolveMediaItem,
+  ),
 );
 
 app.get('*', (_req, res) => {
@@ -291,11 +599,30 @@ async function start() {
     }
   }
 
-  await refreshChannels();
-  transcodeService.startDayRolloverWatch(scheduleOptions, () => channels);
+  await refreshChannels({ rescanOnStartup: libraryRuntime.library.rescanOnStartup });
+  transcodeService.startDayRolloverWatch(
+    scheduleOptions,
+    () => channels,
+    (_dateKey, channelList, scheduleOptionsFactory) => {
+      if (!scheduleService.enabled) {
+        return;
+      }
+
+      scheduleService.ensureAhead(
+        channelList,
+        scheduleOptionsFactory,
+        scheduleAheadDays(),
+        { force: false },
+      );
+    },
+  );
 
   if (config.scanIntervalMinutes > 0) {
-    scanTimer = setInterval(refreshChannels, config.scanIntervalMinutes * 60 * 1000);
+    const intervalRescan = () => {
+      const reconcile = channelRepository.mode === 'database';
+      refreshChannels({ forceReconcile: reconcile });
+    };
+    scanTimer = setInterval(intervalRescan, config.scanIntervalMinutes * 60 * 1000);
   }
 
   const server = app.listen(config.port, config.host, () => {
@@ -326,6 +653,8 @@ process.on('SIGINT', () => {
   if (transcodeService.dayCheckTimer) {
     clearInterval(transcodeService.dayCheckTimer);
   }
+
+  libraryRuntime.close();
 
   process.exit(0);
 });

@@ -78,7 +78,12 @@ function streamMediaFile(req, res, filePath) {
   fs.createReadStream(filePath, { start, end }).pipe(res);
 }
 
-function createMediaHandler(getChannelById, mediaType = 'video', resolvePlaybackPath = null) {
+function createMediaHandler(
+  getChannelById,
+  mediaType = 'video',
+  resolvePlaybackPath = null,
+  resolveMediaItem = null,
+) {
   return (req, res) => {
     const channel = getChannelById(req.params.channelId);
     if (!channel) {
@@ -88,8 +93,14 @@ function createMediaHandler(getChannelById, mediaType = 'video', resolvePlayback
 
     const mediaPath = getRequestedMediaPath(req);
     const normalizedPath = normalizeMediaPath(mediaPath);
-    const list = mediaType === 'ident' ? channel.idents : channel.videos;
-    const match = list.find((item) => item.filename === normalizedPath);
+    let match = null;
+
+    if (typeof resolveMediaItem === 'function') {
+      match = resolveMediaItem(channel, normalizedPath, mediaType);
+    } else {
+      const list = mediaType === 'ident' ? channel.idents : channel.videos;
+      match = list.find((item) => item.filename === normalizedPath);
+    }
 
     if (!match?.path) {
       res.status(404).json({ error: 'Media file not found' });

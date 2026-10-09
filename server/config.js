@@ -44,6 +44,12 @@ const DEFAULT_CONFIG = {
     nativeAudioCodecs: ['aac', 'mp3'],
     probeExtensions: ['.mkv'],
   },
+  library: {
+    mode: 'filesystem',
+    databasePath: '',
+    startupScan: 'if-empty',
+    rescanOnStartup: false,
+  },
 };
 
 function deepMerge(base, override) {

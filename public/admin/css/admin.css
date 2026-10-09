@@ -14,6 +14,12 @@
   --admin-radius: 8px;
   --admin-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --admin-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  --admin-input-bg: var(--admin-bg);
+  --admin-input-bg-hover: #121820;
+  --admin-input-border: var(--admin-border);
+  --admin-input-border-focus: var(--admin-accent);
+  --admin-input-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --admin-input-shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 *,
@@ -198,7 +204,7 @@ a:hover {
   min-width: 12rem;
 }
 
-.admin-field label {
+.admin-field > label:not(:has(input[type="checkbox"])) {
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -206,14 +212,123 @@ a:hover {
   color: var(--admin-muted);
 }
 
+/* Shared control chrome: inputs, selects, textareas */
+.admin-input,
+.admin-field input:not([type="checkbox"]):not([type="radio"]),
 .admin-field select,
-.admin-field input[type="date"] {
+.admin-field textarea {
+  display: block;
+  width: 100%;
   font: inherit;
-  padding: 0.5rem 0.65rem;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  padding: 0.55rem 0.75rem;
   border-radius: var(--admin-radius);
-  border: 1px solid var(--admin-border);
-  background: var(--admin-bg);
+  border: 1px solid var(--admin-input-border);
+  background: var(--admin-input-bg);
   color: var(--admin-text);
+  box-shadow: var(--admin-input-shadow);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.admin-field textarea {
+  min-height: 6rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.admin-field select {
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b9cb3' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 12px;
+  cursor: pointer;
+}
+
+.admin-field input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-field input::placeholder,
+.admin-field textarea::placeholder,
+.admin-input::placeholder {
+  color: var(--admin-muted);
+  opacity: 0.85;
+}
+
+.admin-input:hover,
+.admin-field input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not(:read-only),
+.admin-field select:hover:not(:disabled),
+.admin-field textarea:hover:not(:disabled):not(:read-only) {
+  border-color: #3d4d66;
+  background: var(--admin-input-bg-hover);
+}
+
+.admin-input:focus,
+.admin-field input:not([type="checkbox"]):not([type="radio"]):focus,
+.admin-field select:focus,
+.admin-field textarea:focus {
+  outline: none;
+  border-color: var(--admin-input-border-focus);
+  box-shadow: var(--admin-input-shadow), var(--admin-input-shadow-focus);
+}
+
+.admin-input:disabled,
+.admin-field input:not([type="checkbox"]):disabled,
+.admin-field select:disabled,
+.admin-field textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-field input:read-only {
+  background: var(--admin-surface-2);
+  color: var(--admin-muted);
+  cursor: default;
+}
+
+.admin-field textarea.admin-input--paths,
+.admin-field input.admin-input--path {
+  font-family: var(--admin-mono);
+  font-size: 0.8125rem;
+}
+
+.admin-field label:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.5rem;
+  margin-top: 1.35rem;
+  border-radius: var(--admin-radius);
+  border: 1px solid var(--admin-input-border);
+  background: var(--admin-surface-2);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--admin-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-field label:has(> input[type="checkbox"]:focus-visible) {
+  border-color: var(--admin-input-border-focus);
+  box-shadow: var(--admin-input-shadow-focus);
+}
+
+.admin-field input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--admin-accent);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .admin-btn {
@@ -346,8 +461,67 @@ a:hover {
   text-overflow: ellipsis;
 }
 
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+.admin-field-full {
+  grid-column: 1 / -1;
+}
+
+.admin-field-checkbox {
+  align-self: end;
+}
+
+.admin-field-checkbox label:has(> input[type="checkbox"]) {
+  margin-top: 0;
+}
+
+.admin-card code {
+  font-family: var(--admin-mono);
+  font-size: 0.8125em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--admin-surface-2);
+  border: 1px solid var(--admin-border);
+}
+
+.admin-btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  margin-right: 0.35rem;
+}
+
+.admin-btn-danger {
+  background: var(--admin-danger);
+  border-color: var(--admin-danger);
+}
+
+.admin-btn-danger:hover {
+  filter: brightness(1.05);
+}
+
+.admin-table-actions {
+  white-space: nowrap;
+}
+
 .admin-error {
   color: var(--admin-danger);
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.admin-code-block {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--admin-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  overflow: auto;
+  font-family: var(--admin-mono);
+  font-size: 0.8125rem;
 }
 
 @media (max-width: 768px) {

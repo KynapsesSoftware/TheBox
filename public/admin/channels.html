@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box — Channels</title>
+    <link rel="stylesheet" href="/admin/css/admin.css" />
+  </head>
+  <body class="admin-app">
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <div class="admin-brand">
+          The Box
+          <span>Admin tools</span>
+        </div>
+        <nav id="admin-nav" class="admin-nav" aria-label="Admin navigation"></nav>
+        <div class="admin-sidebar-footer">
+          <a href="/">← Back to TV UI</a>
+        </div>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <h1>Channels</h1>
+          <span id="status-text" class="admin-status"></span>
+        </header>
+
+        <div class="admin-content">
+          <section class="admin-card">
+            <p class="admin-summary" id="library-hint">
+              Manage channels in the SQLite catalogue (<code>library.mode: database</code>).
+            </p>
+
+            <div class="admin-controls">
+              <button id="new-channel-btn" type="button" class="admin-btn">New channel</button>
+              <button id="import-btn" type="button" class="admin-btn admin-btn-secondary">Import from folders</button>
+              <button id="rebuild-all-btn" type="button" class="admin-btn admin-btn-secondary">Rebuild all schedules</button>
+              <button id="global-rescan-btn" type="button" class="admin-btn admin-btn-secondary">Rescan all channels</button>
+            </div>
+
+            <div class="admin-table-wrap" style="margin-top: 1rem;">
+              <table class="admin-table" id="channels-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Page</th>
+                    <th>Programmes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="channels-body"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="admin-card" id="editor-panel" hidden>
+            <h2 id="editor-title">Edit channel</h2>
+            <form id="channel-form" class="admin-form-grid">
+              <div class="admin-field">
+                <label for="field-id">Channel ID</label>
+                <input id="field-id" name="id" type="text" pattern="[a-z0-9-]+" required />
+              </div>
+              <div class="admin-field">
+                <label for="field-displayName">Display name</label>
+                <input id="field-displayName" name="displayName" type="text" required />
+              </div>
+              <div class="admin-field">
+                <label for="field-pageNumber">Page number</label>
+                <input id="field-pageNumber" name="pageNumber" type="number" min="100" max="899" />
+              </div>
+              <div class="admin-field">
+                <label for="field-color">Colour</label>
+                <select id="field-color" name="color">
+                  <option value="cyan">Cyan</option>
+                  <option value="green">Green</option>
+                  <option value="yellow">Yellow</option>
+                  <option value="red">Red</option>
+                  <option value="blue">Blue</option>
+                  <option value="magenta">Magenta</option>
+                </select>
+              </div>
+              <div class="admin-field">
+                <label for="field-mediaType">Media type</label>
+                <select id="field-mediaType" name="mediaType">
+                  <option value="video">video</option>
+                  <option value="audio">audio</option>
+                </select>
+              </div>
+              <div class="admin-field admin-field-full">
+                <label for="field-sourcePaths">Programme source paths (one directory per line)</label>
+                <textarea id="field-sourcePaths" class="admin-input--paths" name="sourcePaths" rows="4" required></textarea>
+              </div>
+              <div class="admin-field admin-field-full">
+                <label for="field-identPath">Ident directory</label>
+                <input id="field-identPath" class="admin-input--path" name="identPath" type="text" spellcheck="false" />
+              </div>
+              <div class="admin-field admin-field-full">
+                <label for="field-testcardPath">Test card file or directory</label>
+                <input id="field-testcardPath" class="admin-input--path" name="testcardPath" type="text" spellcheck="false" />
+              </div>
+              <div class="admin-field admin-field-full">
+                <label for="field-artworkPath">Artwork file (audio)</label>
+                <input id="field-artworkPath" class="admin-input--path" name="artworkPath" type="text" spellcheck="false" />
+              </div>
+              <div class="admin-field">
+                <label for="field-scheduleStart">Schedule start</label>
+                <input id="field-scheduleStart" name="scheduleStart" type="text" placeholder="06:00" />
+              </div>
+              <div class="admin-field">
+                <label for="field-scheduleEnd">Schedule end</label>
+                <input id="field-scheduleEnd" name="scheduleEnd" type="text" placeholder="23:00" />
+              </div>
+              <div class="admin-field">
+                <label for="field-identInterval">Ident interval</label>
+                <input id="field-identInterval" name="identInterval" type="number" min="0" value="0" />
+              </div>
+              <div class="admin-field">
+                <label for="field-maxDuration">Max content (minutes)</label>
+                <input id="field-maxDuration" name="maxContentDurationMinutes" type="number" min="0" />
+              </div>
+              <div class="admin-field admin-field-checkbox">
+                <label><input id="field-scanSubfolders" name="scanSubfolders" type="checkbox" /> Scan subfolders</label>
+              </div>
+              <div class="admin-field admin-field-checkbox">
+                <label><input id="field-adsEnabled" name="adsEnabled" type="checkbox" /> Ads enabled</label>
+              </div>
+              <div class="admin-controls admin-field-full">
+                <button type="submit" class="admin-btn">Save</button>
+                <button type="button" id="cancel-edit-btn" class="admin-btn admin-btn-secondary">Cancel</button>
+                <button type="button" id="rescan-channel-btn" class="admin-btn admin-btn-secondary" hidden>Rescan media</button>
+                <button type="button" id="rebuild-channel-btn" class="admin-btn admin-btn-secondary" hidden>Rebuild schedule</button>
+              </div>
+            </form>
+            <p id="form-error" class="admin-error" hidden></p>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/admin/js/admin-common.js"></script>
+    <script src="/admin/js/channels.js"></script>
+  </body>
+</html>

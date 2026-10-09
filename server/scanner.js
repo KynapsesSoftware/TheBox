@@ -128,11 +128,99 @@ function resolveSourcePath(sourcePath, projectRoot) {
   return normalizeDirectoryPath(resolved);
 }
 
+function rootSlugFromAbsolutePath(absolutePath) {
+  const base = path.basename(normalizeDirectoryPath(absolutePath));
+  return slugify(base) || 'root';
+}
+
+function assignUniqueRootSlugs(resolvedPaths) {
+  const slugUseCount = new Map();
+
+  return resolvedPaths.map((absolutePath) => {
+    const baseSlug = rootSlugFromAbsolutePath(absolutePath);
+    const seen = slugUseCount.get(baseSlug) || 0;
+    slugUseCount.set(baseSlug, seen + 1);
+    const slug = seen === 0 ? baseSlug : `${baseSlug}-${seen + 1}`;
+
+    return {
+      absolutePath,
+      slug,
+    };
+  });
+}
+
+function resolveSourcePathsFromMeta(meta, projectRoot) {
+  if (!Array.isArray(meta.sourcePaths) || meta.sourcePaths.length === 0) {
+    return null;
+  }
+
+  const resolved = [];
+
+  for (const entry of meta.sourcePaths) {
+    if (typeof entry !== 'string') {
+      continue;
+    }
+
+    const resolvedPath = resolveSourcePath(entry, projectRoot);
+    if (resolvedPath) {
+      resolved.push(resolvedPath);
+    }
+  }
+
+  return resolved.length > 0 ? resolved : null;
+}
+
+function resolveProgrammeSourcePlan(meta, channelDir, projectRoot) {
+  const multiPaths = resolveSourcePathsFromMeta(meta, projectRoot);
+
+  if (multiPaths) {
+    const labeledRoots = assignUniqueRootSlugs(multiPaths);
+
+    return {
+      mode: 'multi',
+      sources: labeledRoots.map(({ absolutePath, slug }) => ({
+        path: absolutePath,
+        filenamePrefix: `${slug}/`,
+        excludeDirNames: new Set(),
+      })),
+      sourcePath: multiPaths[0],
+      sourcePaths: multiPaths,
+    };
+  }
+
+  const legacyPath = resolveSourcePath(meta.sourcePath, projectRoot);
+
+  if (legacyPath) {
+    return {
+      mode: 'legacy-single',
+      sources: [{
+        path: legacyPath,
+        filenamePrefix: '',
+        excludeDirNames: new Set(),
+      }],
+      sourcePath: legacyPath,
+      sourcePaths: [legacyPath],
+    };
+  }
+
+  return {
+    mode: 'channel',
+    sources: [{
+      path: channelDir,
+      filenamePrefix: '',
+      excludeDirNames: new Set(['ident']),
+    }],
+    sourcePath: null,
+    sourcePaths: [],
+  };
+}
+
 async function collectVideosFromDirectory(rootDir, extensions, options = {}) {
   const {
     recursive = false,
     excludeDirNames = new Set(['ident']),
     channelId = 'channel',
+    filenamePrefix = '',
   } = options;
   const videos = [];
   const seenPaths = new Set();
@@ -166,7 +254,11 @@ async function collectVideosFromDirectory(rootDir, extensions, options = {}) {
         continue;
       }
 
-      const filename = normalizeMediaPath(entryRelativePath);
+      const relativeFilename = normalizeMediaPath(entryRelativePath);
+      const filename = filenamePrefix
+        ? normalizeMediaPath(`${filenamePrefix}${relativeFilename}`)
+        : relativeFilename;
+
       if (seenPaths.has(filename)) {
         console.warn(`Channel "${channelId}": duplicate media path "${filename}"`);
         continue;
@@ -237,23 +329,45 @@ async function scanChannelFolder(channelDir, scanOptions, projectRoot) {
   const channelId = meta.id || slugify(folderName) || folderName;
   const mediaType = parseMediaType(meta.mediaType);
   const extensions = mediaType === 'audio' ? audioExtensions : videoExtensions;
-  const resolvedSourcePath = resolveSourcePath(meta.sourcePath, projectRoot);
   const scanSubfolders = parseScanSubfolders(meta.scanSubfolders);
-  const videoDir = resolvedSourcePath || channelDir;
-  const excludeDirNames = resolvedSourcePath ? new Set() : new Set(['ident']);
-  const { videos, warning } = await scanVideoDirectory(videoDir, extensions, {
-    recursive: scanSubfolders,
-    excludeDirNames,
-    channelId,
-  });
+  const sourcePlan = resolveProgrammeSourcePlan(meta, channelDir, projectRoot);
+  const videos = [];
+  const seenFilenames = new Set();
+
+  for (const source of sourcePlan.sources) {
+    const { videos: rootVideos, warning } = await scanVideoDirectory(source.path, extensions, {
+      recursive: scanSubfolders,
+      excludeDirNames: source.excludeDirNames,
+      channelId,
+      filenamePrefix: source.filenamePrefix,
+    });
+
+    if (warning) {
+      const label = source.filenamePrefix
+        ? source.filenamePrefix.replace(/\/$/, '')
+        : source.path;
+      console.warn(`Channel "${channelId}" (${label}): ${warning}`);
+    }
+
+    for (const video of rootVideos) {
+      if (seenFilenames.has(video.filename)) {
+        console.warn(
+          `Channel "${channelId}": duplicate media path "${video.filename}" (skipped)`,
+        );
+        continue;
+      }
+
+      seenFilenames.add(video.filename);
+      videos.push(video);
+    }
+  }
+
+  videos.sort((a, b) => a.filename.localeCompare(b.filename));
+
   const identDir = path.join(channelDir, 'ident');
   const idents = await scanOptionalVideoDirectory(identDir, extensions);
   const testCardPath = resolveChannelTestCardPath(channelDir);
   const artworkPath = mediaType === 'audio' ? resolveArtworkPath(channelDir, meta) : null;
-
-  if (warning) {
-    console.warn(`Channel "${channelId}": ${warning}`);
-  }
 
   return {
     id: channelId,
@@ -264,7 +378,8 @@ async function scanChannelFolder(channelDir, scanOptions, projectRoot) {
     mediaType,
     artworkPath,
     testCardPath,
-    sourcePath: resolvedSourcePath,
+    sourcePath: sourcePlan.sourcePath,
+    sourcePaths: sourcePlan.sourcePaths,
     scanSubfolders,
     maxContentDuration: parseMaxContentDuration(meta.maxContentDuration),
     identInterval: parseIdentInterval(meta.identInterval),
@@ -302,6 +417,8 @@ async function scanChannels(channelsRoot, scanOptions, projectRoot = path.dirnam
 }
 
 module.exports = {
+  assignUniqueRootSlugs,
+  isMediaFile,
   normalizeDirectoryPath,
   normalizeMediaPath,
   parseIdentInterval,
@@ -310,7 +427,10 @@ module.exports = {
   parseScanSubfolders,
   parseAdsEnabled,
   resolveArtworkPath,
+  resolveProgrammeSourcePlan,
   resolveSourcePath,
+  resolveSourcePathsFromMeta,
+  rootSlugFromAbsolutePath,
   scanChannels,
   scanChannelFolder,
   scanOptionalVideoDirectory,

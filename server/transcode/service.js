@@ -48,6 +48,7 @@ class TranscodeService {
     this.runningCount = 0;
     this.lastDateKey = null;
     this.dayCheckTimer = null;
+    this.onTranscodeComplete = null;
   }
 
   get enabled() {
@@ -72,7 +73,22 @@ class TranscodeService {
         continue;
       }
 
-      video.cacheKey = computeCacheKey(video.path);
+      let cacheKey;
+      try {
+        cacheKey = computeCacheKey(video.path);
+      } catch {
+        cacheKey = null;
+      }
+
+      if (video.catalogueFromDb && cacheKey && video.cacheKey === cacheKey) {
+        const probeKnown = video.needsTranscode === false || video.transcodeProbe != null;
+        if (probeKnown) {
+          video.cacheKey = cacheKey;
+          continue;
+        }
+      }
+
+      video.cacheKey = cacheKey;
       const analysis = await analyzePlaybackProbe(video.path, this.settings);
       video.needsTranscode = analysis.needsTranscode;
       video.transcodeProbe = analysis.transcodeProbe;
@@ -147,7 +163,7 @@ class TranscodeService {
     return 'required';
   }
 
-  buildQueueFromChannels(channels, scheduleOptionsFactory) {
+  buildQueueFromChannels(channels, scheduleOptionsFactory, resolveChannelSchedule) {
     this.queue = [];
     this.skippedKeys.clear();
 
@@ -167,14 +183,19 @@ class TranscodeService {
 
       for (let dayOffset = 0; dayOffset < this.settings.scheduleAheadDays; dayOffset += 1) {
         const date = new Date(nowMs + (dayOffset * 24 * 60 * 60 * 1000));
-        const schedule = generateChannelSchedule(channel, scheduleOptionsFactory(date));
+        const scheduleOptions = scheduleOptionsFactory(date);
+        const schedule = resolveChannelSchedule
+          ? resolveChannelSchedule(channel, scheduleOptions)
+          : generateChannelSchedule(channel, scheduleOptions);
 
         for (const slot of schedule.slots) {
           if (slot.isAd || slot.isIdent) {
             continue;
           }
 
-          const video = findVideoByFilename(channel, slot.filename);
+          const video = this._resolveProgrammeVideo
+            ? this._resolveProgrammeVideo(channel, slot.filename)
+            : findVideoByFilename(channel, slot.filename);
           if (!video?.needsTranscode || this.isVideoCached(video)) {
             continue;
           }
@@ -231,7 +252,15 @@ class TranscodeService {
     );
   }
 
-  refreshQueue(channels, scheduleOptionsFactory) {
+  refreshQueue(
+    channels,
+    scheduleOptionsFactory,
+    resolveChannelSchedule,
+    resolveProgrammeVideo = null,
+  ) {
+    this._resolveChannelSchedule = resolveChannelSchedule || null;
+    this._resolveProgrammeVideo = resolveProgrammeVideo || null;
+
     if (!this.settings.enabled) {
       return;
     }
@@ -247,7 +276,7 @@ class TranscodeService {
     }
 
     ensureCacheDirectory(this.cacheDir);
-    this.buildQueueFromChannels(channels, scheduleOptionsFactory);
+    this.buildQueueFromChannels(channels, scheduleOptionsFactory, resolveChannelSchedule);
     this.pumpQueue();
   }
 
@@ -313,6 +342,16 @@ class TranscodeService {
       if (code === 0 && fs.existsSync(tempPath)) {
         fs.renameSync(tempPath, outputPath);
         console.log(`Transcode complete: ${job.filename}`);
+
+        if (typeof this.onTranscodeComplete === 'function') {
+          this.onTranscodeComplete({
+            cacheKey: job.cacheKey,
+            channelId: job.channelId,
+            filename: job.filename,
+            sourcePath: job.sourcePath,
+            note: null,
+          });
+        }
       } else {
         if (fs.existsSync(tempPath)) {
           fs.unlinkSync(tempPath);
@@ -335,7 +374,7 @@ class TranscodeService {
     });
   }
 
-  startDayRolloverWatch(scheduleOptionsFactory, getChannels) {
+  startDayRolloverWatch(scheduleOptionsFactory, getChannels, onDayRollover) {
     if (this.dayCheckTimer) {
       clearInterval(this.dayCheckTimer);
     }
@@ -352,22 +391,32 @@ class TranscodeService {
       if (dateKey !== this.lastDateKey) {
         this.lastDateKey = dateKey;
         console.log(`Schedule day rollover (${dateKey}): refreshing transcode queue.`);
-        this.refreshQueue(getChannels(), scheduleOptionsFactory);
+        if (typeof onDayRollover === 'function') {
+          onDayRollover(dateKey, getChannels(), scheduleOptionsFactory);
+        }
+        this.refreshQueue(
+          getChannels(),
+          scheduleOptionsFactory,
+          this._resolveChannelSchedule,
+        );
       }
     }, 60 * 1000);
   }
 
-  attachScheduleMeta(schedule, channel) {
+  attachScheduleMeta(schedule, channel, resolveProgrammeVideo = null) {
     if (!this.settings.enabled) {
       return schedule;
     }
+
+    const lookupVideo = resolveProgrammeVideo
+      || ((ch, filename) => findVideoByFilename(ch, filename));
 
     const slots = schedule.slots.map((slot) => {
       if (slot.isAd || slot.isIdent) {
         return slot;
       }
 
-      const video = findVideoByFilename(channel, slot.filename);
+      const video = lookupVideo(channel, slot.filename);
       return {
         ...slot,
         transcodeStatus: this.getStatusForVideo(video),

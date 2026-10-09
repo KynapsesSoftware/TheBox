@@ -2,9 +2,19 @@ window.TheBoxAdmin = {
   tools: [
     { href: '/admin/', label: 'Overview', pathMatch: /\/admin\/?$/ },
     {
+      href: '/admin/channels.html',
+      label: 'Channels',
+      pathMatch: /channels\.html$/,
+    },
+    {
       href: '/admin/schedule-inspector.html',
       label: 'Schedule inspector',
       pathMatch: /schedule-inspector\.html$/,
+    },
+    {
+      href: '/admin/transcode-cache.html',
+      label: 'Transcode cache',
+      pathMatch: /transcode-cache\.html$/,
     },
   ],
 

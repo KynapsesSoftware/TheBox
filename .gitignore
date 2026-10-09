@@ -2,6 +2,9 @@ node_modules/
 .DS_Store
 Thumbs.db
 .private/
+database/*.db
+database/*.db-wal
+database/*.db-shm
 *.log
 *.mp4
 *.mkv
