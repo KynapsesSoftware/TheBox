@@ -4,8 +4,6 @@
 
 This guide covers installation, configuration, channel setup, scheduling, the on-screen interface, remote control, developer tools, and troubleshooting.
 
-The Box - Screenshot 1
-
 ---
 
 ## Table of contents
@@ -14,11 +12,11 @@ The Box - Screenshot 1
 2. [Installation](#installation)
 3. [Quick start](#quick-start)
 4. [Project layout](#project-layout)
-5. [Server startup configuration (`config.json`)](#server-startup-configuration-configjson) — [SQLite catalogue](#sqlite-catalogue) and [Admin → Settings](#admin-tools)
+5. [Server startup configuration (](#server-startup-configuration-configjson)`config.json`[)](#server-startup-configuration-configjson) — [SQLite catalogue](#sqlite-catalogue) and [Admin → Settings](#admin-tools)
 6. [Adding and configuring channels](#adding-and-configuring-channels)
 7. [How scheduling works](#how-scheduling-works)
 8. [The interface (Ceefax pages)](#the-interface-ceefax-pages)
-9. [Client-side settings (`api.js`)](#client-side-settings-apijs)
+9. [Client-side settings (](#client-side-settings-apijs)`api.js`[)](#client-side-settings-apijs)
 10. [Media remote control](#media-remote-control)
 11. [Page number on-screen display (OSD)](#page-number-on-screen-display-osd)
 12. [Design / developer guide overlay](#design--developer-guide-overlay)
@@ -146,11 +144,12 @@ Do not put schedule, ads, or transcode settings here — use **Admin → Setting
 The Box is **database-first**: channels, media catalogue, cached daily schedules, application settings, and (optionally) transcode cache metadata live in the file at `databasePath` (default `database/thebox.db` under the project’s `database/` folder; `*.db` files are gitignored).
 
 
-| Topic                 | Behaviour                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Channel config        | Rows in SQLite; [Admin → Channels](#channels-admin) or admin API                                                   |
-| Programmes at runtime | Metadata in RAM; full paths resolved from the DB on playback                                                       |
-| Schedules             | Cached in the DB; rebuilt on rescan or admin action                                                                |
+| Topic                 | Behaviour                                                        |
+| --------------------- | ---------------------------------------------------------------- |
+| Channel config        | Rows in SQLite; [Admin → Channels](#channels-admin) or admin API |
+| Programmes at runtime | Metadata in RAM; full paths resolved from the DB on playback     |
+| Schedules             | Cached in the DB; rebuilt on rescan or admin action              |
+
 
 **First run with an empty database**
 
@@ -206,21 +205,23 @@ Paths must exist when you save; after adding or moving files on disk, run **Resc
 ### Channel fields (admin)
 
 
-| Field                         | Description                                                                                                                                                                                                                                                       |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Display name                  | Name shown in the UI                                                                                                                                                                                                                                              |
-| Media type                    | Video or audio; the channel scans only one type                                                                                                                                                                                                                   |
-| Programme source paths        | One or more directories (one per line)                                                                                                                                                                                                                            |
-| Ident directory               | Optional folder of ident clips (video or audio to match the channel)                                                                                                                                                                                              |
-| Test card path                | Optional `testcard.mp4` / `testcard.mkv` file for off-air standby on that channel                                                                                                                                                                                 |
-| Artwork path                  | Optional image for audio channels on Page 300                                                                                                                                                                                                                     |
-| Page number                   | Ceefax-style page number in the channel list                                                                                                                                                                                                                      |
-| Colour                        | Accent in the channel list: cyan, green, yellow, red, blue, magenta                                                                                                                                                                                               |
-| Max content duration (minutes)| Optional cap; longer files are indexed but excluded from the daily schedule                                                                                                                                                                                     |
-| Ident interval                | `0` = no idents (default). `1` = after every programme. `2` = after every two programmes, etc. Requires an ident directory with playable files                                                                                                                  |
-| Ads enabled                   | Opt in for commercial breaks when ads are enabled globally and the ad library is valid                                                                                                                                                                            |
-| Scan subfolders               | When enabled, recurse into subdirectories under each programme source path                                                                                                                                                                                        |
-| Schedule start / end          | Per-channel broadcast window (`HH:MM`, 24-hour). Leave blank to use **Default start time** and **Default end time** from **[Admin → Settings](#admin-tools)**                                                                                                    |
+| Field                          | Description                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Display name                   | Name shown in the UI                                                                                                                                          |
+| Media type                     | Video or audio; the channel scans only one type                                                                                                               |
+| Programme source paths         | One or more directories (one per line)                                                                                                                        |
+| Ident directory                | Optional folder of ident clips (video or audio to match the channel)                                                                                          |
+| Test card path                 | Optional `testcard.mp4` / `testcard.mkv` file for off-air standby on that channel                                                                             |
+| Artwork path                   | Optional image for audio channels on Page 300                                                                                                                 |
+| Page number                    | Ceefax-style page number in the channel list                                                                                                                  |
+| Colour                         | Accent in the channel list: cyan, green, yellow, red, blue, magenta                                                                                           |
+| Max content duration (minutes) | Optional cap; longer files are indexed but excluded from the daily schedule                                                                                   |
+| Ident interval                 | `0` = no idents (default). `1` = after every programme. `2` = after every two programmes, etc. Requires an ident directory with playable files                |
+| Ads enabled                    | Opt in for commercial breaks when ads are enabled globally and the ad library is valid                                                                        |
+| Scan subfolders                | When enabled, recurse into subdirectories under each programme source path                                                                                    |
+| Schedule start / end           | Per-channel broadcast window (`HH:MM`, 24-hour). Leave blank to use **Default start time** and **Default end time** from **[Admin → Settings](#admin-tools)** |
+
+
 
 
 ### Channel idents
@@ -248,6 +249,8 @@ Ads live in a **single global folder** (**Ads path** in Settings; must be an abs
 - When an ident is also due before the next programme, **ads play first, then the ident**. Idents never follow mid-programme ad breaks.
 - During playback, the Now Showing overlay keeps the current or next programme title (not ad filenames). Between-programme ads show the **next** programme’s times.
 
+
+
 ### Audio channels
 
 For **Media type** audio:
@@ -257,6 +260,8 @@ For **Media type** audio:
 - Page 300 shows static artwork in the picture area while audio plays
 - Set **Artwork path** or rely on common filenames in a programme folder (`artwork.png`, `cover.png`, etc.)
 - Full screen expands the artwork area rather than a video element
+
+
 
 ### 3. Rescan and schedules
 
@@ -835,7 +840,7 @@ Many remotes send non-standard key codes. Open **Page 400**, press each button, 
 ### Times look wrong
 
 - Schedule generation uses **Schedule timezone** from **[Admin → Settings](#admin-tools)**
-- The UI displays clock times using that timezone when **`TheBox.ready`** has loaded public settings (see [Client-side settings](#client-side-settings-apijs))
+- The UI displays clock times using that timezone when `TheBox.ready` has loaded public settings (see [Client-side settings](#client-side-settings-apijs))
 - Set **Schedule timezone** to match your intended broadcast region
 
 
