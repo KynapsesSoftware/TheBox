@@ -3,7 +3,6 @@ const {
   normalizeLibraryConfig,
 } = require('./createChannelRepository');
 const { DatabaseChannelRepository } = require('./databaseChannelRepository');
-const { FilesystemChannelRepository } = require('./filesystemChannelRepository');
 const {
   CURRENT_SCHEMA_VERSION,
   closeLibraryDatabase,
@@ -14,7 +13,6 @@ const {
 module.exports = {
   CURRENT_SCHEMA_VERSION,
   DatabaseChannelRepository,
-  FilesystemChannelRepository,
   closeLibraryDatabase,
   createChannelRepository,
   normalizeLibraryConfig,

@@ -5,7 +5,7 @@ const clockText = document.getElementById('clock-text');
 const dateText = document.getElementById('date-text');
 
 function updateClock() {
-  clockText.textContent = new Date().toLocaleString();
+  clockText.textContent = TheBox.formatLocalDateTime();
 }
 
 const GUIDE_HEADERS = ['ON NOW', 'NEXT', 'THEN', 'LATER'];
@@ -138,7 +138,13 @@ async function renderGuide() {
   }
 }
 
-updateClock();
-setInterval(updateClock, 1000);
-renderGuide();
-setInterval(renderGuide, GUIDE_REFRESH_MS);
+async function bootGuidePage() {
+  await TheBox.ready;
+  TheBox.applyDocumentTitle('TV Guide');
+  updateClock();
+  setInterval(updateClock, 1000);
+  renderGuide();
+  setInterval(renderGuide, GUIDE_REFRESH_MS);
+}
+
+bootGuidePage();

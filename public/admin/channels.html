@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Box — Channels</title>
+    <script src="/admin/js/admin-theme-init.js"></script>
     <link rel="stylesheet" href="/admin/css/admin.css" />
   </head>
   <body class="admin-app">
@@ -28,12 +29,12 @@
         <div class="admin-content">
           <section class="admin-card">
             <p class="admin-summary" id="library-hint">
-              Manage channels in the SQLite catalogue (<code>library.mode: database</code>).
+              Manage channels in the SQLite catalogue. Library options such as rescan on startup are in
+              <a href="/admin/settings.html">Settings</a>.
             </p>
 
             <div class="admin-controls">
               <button id="new-channel-btn" type="button" class="admin-btn">New channel</button>
-              <button id="import-btn" type="button" class="admin-btn admin-btn-secondary">Import from folders</button>
               <button id="rebuild-all-btn" type="button" class="admin-btn admin-btn-secondary">Rebuild all schedules</button>
               <button id="global-rescan-btn" type="button" class="admin-btn admin-btn-secondary">Rescan all channels</button>
             </div>

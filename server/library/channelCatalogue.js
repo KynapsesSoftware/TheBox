@@ -1,11 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const { probeDurationSeconds, displayTitleFromFilename } = require('../metadata');
 const {
   assignUniqueRootSlugs,
   normalizeDirectoryPath,
   parseMediaType,
-  scanChannels,
 } = require('../scanner');
 const { computeCacheKey } = require('../transcode/cache');
 const { analyzePlaybackProbe } = require('../transcode/probe');
@@ -16,55 +13,8 @@ const {
   getAllChannelRows,
   getMediaRow,
   getMediaRows,
-  upsertChannelRow,
   upsertMediaRow,
 } = require('./channelDb');
-
-function buildSourcePathsJson(channel, channelDir) {
-  if (Array.isArray(channel.sourcePaths) && channel.sourcePaths.length > 0) {
-    return JSON.stringify(channel.sourcePaths);
-  }
-
-  if (channel.sourcePath) {
-    return JSON.stringify([channel.sourcePath]);
-  }
-
-  return JSON.stringify([channelDir]);
-}
-
-function channelRowFromScan(channel, channelDir) {
-  const identDir = path.join(channelDir, 'ident');
-  let identPath = null;
-
-  if (fs.existsSync(identDir)) {
-    try {
-      if (fs.statSync(identDir).isDirectory()) {
-        identPath = identDir;
-      }
-    } catch {
-      identPath = null;
-    }
-  }
-
-  return {
-    id: channel.id,
-    display_name: channel.displayName,
-    page_number: channel.pageNumber,
-    color: channel.color,
-    media_type: channel.mediaType,
-    schedule_start: channel.schedule?.startTime || null,
-    schedule_end: channel.schedule?.endTime || null,
-    max_content_duration_minutes: channel.maxContentDuration,
-    ident_interval: channel.identInterval ?? 0,
-    ads_enabled: channel.adsEnabled ? 1 : 0,
-    scan_subfolders: channel.scanSubfolders ? 1 : 0,
-    source_paths_json: buildSourcePathsJson(channel, channelDir),
-    ident_path: identPath,
-    testcard_path: channel.testCardPath,
-    artwork_path: channel.artworkPath,
-    folder_name: channel.folderName,
-  };
-}
 
 function mediaRowFromVideo(channelId, kind, video, extras = {}) {
   return {
@@ -82,90 +32,6 @@ function mediaRowFromVideo(channelId, kind, video, extras = {}) {
   };
 }
 
-async function persistScannedChannel(db, channel, channelDir, transcodeSettings) {
-  upsertChannelRow(db, channelRowFromScan(channel, channelDir));
-
-  deleteChannelMedia(db, channel.id);
-
-  for (const video of channel.videos) {
-    let cacheKey = null;
-    try {
-      cacheKey = computeCacheKey(video.path);
-    } catch {
-      cacheKey = null;
-    }
-
-    let stat = { size: 0, mtimeMs: 0 };
-    try {
-      stat = fs.statSync(video.path);
-    } catch {
-      // keep defaults
-    }
-
-    let needsTranscode = null;
-    let transcodeProbeJson = null;
-
-    if (
-      transcodeSettings?.enabled
-      && channel.mediaType !== 'audio'
-      && video.durationSeconds
-    ) {
-      const analysis = await analyzePlaybackProbe(video.path, transcodeSettings);
-      needsTranscode = analysis.needsTranscode;
-      transcodeProbeJson = analysis.transcodeProbe
-        ? JSON.stringify(analysis.transcodeProbe)
-        : null;
-    }
-
-    upsertMediaRow(
-      db,
-      mediaRowFromVideo(channel.id, 'programme', video, {
-        sizeBytes: stat.size,
-        mtimeMs: stat.mtimeMs,
-        cacheKey,
-        needsTranscode,
-        transcodeProbeJson,
-      }),
-    );
-  }
-
-  for (const ident of channel.idents) {
-    let cacheKey = null;
-    try {
-      cacheKey = computeCacheKey(ident.path);
-    } catch {
-      cacheKey = null;
-    }
-
-    let stat = { size: 0, mtimeMs: 0 };
-    try {
-      stat = fs.statSync(ident.path);
-    } catch {
-      // keep defaults
-    }
-
-    upsertMediaRow(
-      db,
-      mediaRowFromVideo(channel.id, 'ident', ident, {
-        sizeBytes: stat.size,
-        mtimeMs: stat.mtimeMs,
-        cacheKey,
-      }),
-    );
-  }
-}
-
-async function importFromChannelsRoot(db, { channelsRoot, scanOptions, projectRoot, transcodeSettings }) {
-  const scanned = await scanChannels(channelsRoot, scanOptions, projectRoot);
-
-  for (const channel of scanned) {
-    const channelDir = path.join(channelsRoot, channel.folderName);
-    await persistScannedChannel(db, channel, channelDir, transcodeSettings);
-  }
-
-  return scanned.length;
-}
-
 function parseSourcePathsJson(sourcePathsJson) {
   try {
     const parsed = JSON.parse(sourcePathsJson || '[]');
@@ -175,23 +41,17 @@ function parseSourcePathsJson(sourcePathsJson) {
   }
 }
 
-function programmeSourcesFromChannelRow(row, channelsRoot) {
+function programmeSourcesFromChannelRow(row) {
   const paths = parseSourcePathsJson(row.source_paths_json);
   if (paths.length === 0) {
     return [];
   }
 
   if (paths.length === 1) {
-    const channelFolderPath = row.folder_name && channelsRoot
-      ? normalizeDirectoryPath(path.join(channelsRoot, row.folder_name))
-      : null;
-    const isChannelRoot = channelFolderPath
-      && normalizeDirectoryPath(paths[0]) === channelFolderPath;
-
     return [{
       path: paths[0],
       filenamePrefix: '',
-      excludeDirNames: isChannelRoot ? new Set(['ident']) : new Set(),
+      excludeDirNames: new Set(),
     }];
   }
 
@@ -273,14 +133,14 @@ async function resolveMediaProbe(
   };
 }
 
-async function reconcileChannelMedia(db, row, { scanOptions, channelsRoot, transcodeSettings }) {
+async function reconcileChannelMedia(db, row, { scanOptions, transcodeSettings }) {
   const channelId = row.id;
   const extensions = extensionsForRow(row, scanOptions);
   const mediaType = parseMediaType(row.media_type);
   const recursive = row.scan_subfolders === 1;
   const programmeFilenames = [];
 
-  const programmeSources = programmeSourcesFromChannelRow(row, channelsRoot);
+  const programmeSources = programmeSourcesFromChannelRow(row);
 
   for (const source of programmeSources) {
     const entries = enumerateMediaFilesFromDirectory(source.path, extensions, {
@@ -419,7 +279,6 @@ function channelRowToSlimRuntime(row, stats = {}) {
 
   return {
     id: row.id,
-    folderName: row.folder_name,
     displayName: row.display_name,
     pageNumber: row.page_number,
     color: row.color,
@@ -457,7 +316,6 @@ function channelRowToRuntime(row, mediaRows) {
 
   return {
     id: row.id,
-    folderName: row.folder_name,
     displayName: row.display_name,
     pageNumber: row.page_number,
     color: row.color,
@@ -500,9 +358,7 @@ module.exports = {
   getMediaStatsByChannel,
   hydrateAllChannels,
   hydrateAllChannelsSlim,
-  importFromChannelsRoot,
   mediaRowToRuntimeVideo,
   parseSourcePathsJson,
-  persistScannedChannel,
   reconcileChannelMedia,
 };

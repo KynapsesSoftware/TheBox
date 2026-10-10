@@ -66,12 +66,12 @@ function upsertChannelRow(db, row) {
       id, display_name, page_number, color, media_type,
       schedule_start, schedule_end, max_content_duration_minutes,
       ident_interval, ads_enabled, scan_subfolders,
-      source_paths_json, ident_path, testcard_path, artwork_path, folder_name, updated_at
+      source_paths_json, ident_path, testcard_path, artwork_path, updated_at
     ) VALUES (
       @id, @display_name, @page_number, @color, @media_type,
       @schedule_start, @schedule_end, @max_content_duration_minutes,
       @ident_interval, @ads_enabled, @scan_subfolders,
-      @source_paths_json, @ident_path, @testcard_path, @artwork_path, @folder_name, datetime('now')
+      @source_paths_json, @ident_path, @testcard_path, @artwork_path, datetime('now')
     )
     ON CONFLICT(id) DO UPDATE SET
       display_name = excluded.display_name,
@@ -88,7 +88,6 @@ function upsertChannelRow(db, row) {
       ident_path = excluded.ident_path,
       testcard_path = excluded.testcard_path,
       artwork_path = excluded.artwork_path,
-      folder_name = excluded.folder_name,
       updated_at = datetime('now')
   `).run(row);
 }

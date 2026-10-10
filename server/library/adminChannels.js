@@ -110,7 +110,6 @@ function rowToAdminChannel(row, stats = {}) {
     identPath: row.ident_path,
     testcardPath: row.testcard_path,
     artworkPath: row.artwork_path,
-    folderName: row.folder_name,
     schedule: {
       startTime: row.schedule_start,
       endTime: row.schedule_end,
@@ -223,7 +222,6 @@ function validateAndBuildChannelRow(payload, projectRoot, { existingId = null } 
       ident_path: identPath,
       testcard_path: testcardPath,
       artwork_path: artworkPath,
-      folder_name: payload.folderName || null,
     },
     sourcePaths: sourceResult.paths,
   };
@@ -259,7 +257,6 @@ function updateAdminChannel(db, channelId, payload, projectRoot) {
     identPath: payload.identPath !== undefined ? payload.identPath : existing.ident_path,
     testcardPath: payload.testcardPath !== undefined ? payload.testcardPath : existing.testcard_path,
     artworkPath: payload.artworkPath !== undefined ? payload.artworkPath : existing.artwork_path,
-    folderName: payload.folderName !== undefined ? payload.folderName : existing.folder_name,
     schedule: {
       startTime: payload.schedule?.startTime ?? existing.schedule_start,
       endTime: payload.schedule?.endTime ?? existing.schedule_end,

@@ -106,8 +106,13 @@ TheBox.remote = {
     window.location.href = url;
   },
 
+  defaultPageNumber() {
+    const page = Number(TheBox.publicSettings?.defaultPage);
+    return this.pages[page] ? page : 100;
+  },
+
   goHome() {
-    this.navigate(this.pages[100]);
+    this.navigate(this.pages[this.defaultPageNumber()]);
   },
 
   goBack() {
@@ -329,4 +334,14 @@ TheBox.remote = {
   },
 };
 
-TheBox.remote.init();
+function initRemote() {
+  TheBox.remote.init();
+  const page = TheBox.remote.detectPage();
+  TheBox.remote.mountPage(page);
+}
+
+if (TheBox.ready?.then) {
+  TheBox.ready.then(() => initRemote()).catch(() => initRemote());
+} else {
+  initRemote();
+}

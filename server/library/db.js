@@ -4,9 +4,11 @@ const {
   applySchemaVersion2,
   applySchemaVersion3,
   applySchemaVersion4,
+  applySchemaVersion5,
+  applySchemaVersion6,
 } = require('./schema');
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 6;
 
 function resolveDatabasePath(rawPath, projectRoot) {
   if (typeof rawPath !== 'string' || !rawPath.trim()) {
@@ -43,6 +45,14 @@ function migrateSchema(db) {
 
     if (next === 4) {
       applySchemaVersion4(db);
+    }
+
+    if (next === 5) {
+      applySchemaVersion5(db);
+    }
+
+    if (next === 6) {
+      applySchemaVersion6(db);
     }
 
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(next);

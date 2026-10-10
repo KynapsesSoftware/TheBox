@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
+const DEFAULT_DATABASE_PATH = './database/thebox.db';
+
 const DEFAULT_CONFIG = {
-  channelsRoot: './channels',
   host: '0.0.0.0',
   port: 8080,
   videoExtensions: ['.mp4', '.mkv', '.webm', '.mov', '.avi'],
@@ -45,12 +46,11 @@ const DEFAULT_CONFIG = {
     probeExtensions: ['.mkv'],
   },
   library: {
-    mode: 'filesystem',
-    databasePath: '',
-    startupScan: 'if-empty',
     rescanOnStartup: false,
   },
 };
+
+const LOCAL_CONFIG_FILENAME = 'config.local.json';
 
 function deepMerge(base, override) {
   if (!override || typeof override !== 'object') {
@@ -68,13 +68,53 @@ function deepMerge(base, override) {
   return result;
 }
 
-const LOCAL_CONFIG_FILENAME = 'config.local.json';
-
 function readJsonFile(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
-function loadConfig(configPath = './config.json') {
+function resolveDatabasePathFromObject(obj) {
+  if (!obj || typeof obj !== 'object') {
+    return null;
+  }
+
+  if (typeof obj.databasePath === 'string' && obj.databasePath.trim()) {
+    return obj.databasePath.trim();
+  }
+
+  if (typeof obj.library?.databasePath === 'string' && obj.library.databasePath.trim()) {
+    return obj.library.databasePath.trim();
+  }
+
+  return null;
+}
+
+function hasNonBootstrapKeys(obj) {
+  if (!obj || typeof obj !== 'object') {
+    return false;
+  }
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === 'databasePath') {
+      continue;
+    }
+
+    if (key === 'library' && value && typeof value === 'object') {
+      for (const libraryKey of Object.keys(value)) {
+        if (libraryKey === 'databasePath' || libraryKey === 'mode') {
+          continue;
+        }
+        return true;
+      }
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+function loadLegacyMergedConfig(configPath) {
   const resolvedPath = path.resolve(configPath);
   const configDir = path.dirname(resolvedPath);
   const localConfigPath = path.join(configDir, LOCAL_CONFIG_FILENAME);
@@ -85,25 +125,63 @@ function loadConfig(configPath = './config.json') {
     merged = deepMerge(merged, readJsonFile(resolvedPath));
   }
 
-  const localConfigLoaded = fs.existsSync(localConfigPath);
-  if (localConfigLoaded) {
+  if (fs.existsSync(localConfigPath)) {
     merged = deepMerge(merged, readJsonFile(localConfigPath));
   }
 
-  return {
-    ...merged,
-    configPath: resolvedPath,
-    localConfigPath: localConfigLoaded ? localConfigPath : null,
-  };
+  return merged;
 }
 
-function resolveChannelsRoot(config) {
-  const configDir = path.dirname(config.configPath);
-  return path.resolve(configDir, config.channelsRoot);
+function loadBootstrapConfig(configPath = './config.json') {
+  const resolvedPath = path.resolve(configPath);
+  const configDir = path.dirname(resolvedPath);
+  const projectRoot = configDir;
+  const localConfigPath = path.join(configDir, LOCAL_CONFIG_FILENAME);
+
+  let mainConfig = {};
+  if (fs.existsSync(resolvedPath)) {
+    mainConfig = readJsonFile(resolvedPath);
+  }
+
+  let localConfig = {};
+  const localConfigLoaded = fs.existsSync(localConfigPath);
+  if (localConfigLoaded) {
+    localConfig = readJsonFile(localConfigPath);
+  }
+
+  const legacyJsonKeysIgnored =
+    hasNonBootstrapKeys(mainConfig) || hasNonBootstrapKeys(localConfig);
+
+  const explicitDatabasePath =
+    resolveDatabasePathFromObject(localConfig)
+    || resolveDatabasePathFromObject(mainConfig);
+
+  let databasePath = explicitDatabasePath || DEFAULT_DATABASE_PATH;
+
+  let legacyMergedConfig = null;
+  if (legacyJsonKeysIgnored) {
+    legacyMergedConfig = loadLegacyMergedConfig(resolvedPath);
+    if (!explicitDatabasePath) {
+      const legacyPath = resolveDatabasePathFromObject(legacyMergedConfig);
+      if (legacyPath) {
+        databasePath = legacyPath;
+      }
+    }
+  }
+
+  return {
+    databasePath,
+    configPath: resolvedPath,
+    localConfigPath: localConfigLoaded ? localConfigPath : null,
+    projectRoot,
+    legacyJsonKeysIgnored,
+    legacyMergedConfig,
+  };
 }
 
 module.exports = {
   DEFAULT_CONFIG,
-  loadConfig,
-  resolveChannelsRoot,
+  DEFAULT_DATABASE_PATH,
+  loadBootstrapConfig,
+  loadLegacyMergedConfig,
 };

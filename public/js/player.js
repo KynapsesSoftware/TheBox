@@ -89,7 +89,7 @@ function clearTestPatternLayout() {
 }
 
 function updateClock() {
-  clockText.textContent = new Date().toLocaleString();
+  clockText.textContent = TheBox.formatLocalDateTime();
 }
 
 function updateChannelPageLabel() {
@@ -524,7 +524,13 @@ mediaStage.addEventListener('click', (event) => {
 
 document.addEventListener('fullscreenchange', updateWatchStatus);
 
-updateClock();
-setInterval(updateClock, 1000);
-setInterval(loadNowPlaying, 30000);
-initWatchPage();
+async function bootWatchPage() {
+  await TheBox.ready;
+  TheBox.applyDocumentTitle('Watch');
+  updateClock();
+  setInterval(updateClock, 1000);
+  setInterval(loadNowPlaying, 30000);
+  initWatchPage();
+}
+
+bootWatchPage();

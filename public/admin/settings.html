@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Box — Settings</title>
+    <script src="/admin/js/admin-theme-init.js"></script>
+    <link rel="stylesheet" href="/admin/css/admin.css" />
+  </head>
+  <body class="admin-app">
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <div class="admin-brand">
+          The Box
+          <span>Admin tools</span>
+        </div>
+        <nav id="admin-nav" class="admin-nav" aria-label="Admin navigation"></nav>
+        <div class="admin-sidebar-footer">
+          <a href="/">← Back to TV UI</a>
+        </div>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <h1>Settings</h1>
+          <span id="status-text" class="admin-status"></span>
+        </header>
+
+        <div class="admin-content">
+          <section class="admin-card">
+            <p id="listen-summary" class="admin-summary"></p>
+            <p id="save-notice" class="admin-summary" hidden></p>
+          </section>
+
+          <form id="settings-form">
+            <section class="admin-card">
+              <h2>Server</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field">
+                  <label for="field-host">Host</label>
+                  <input id="field-host" name="host" type="text" autocomplete="off" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-port">Port</label>
+                  <input id="field-port" name="port" type="number" min="1" max="65535" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-scanInterval">Scan interval (minutes, 0 = off)</label>
+                  <input id="field-scanInterval" name="scanIntervalMinutes" type="number" min="0" />
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <h2>Schedule defaults</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field admin-field-full">
+                  <label for="field-timezone">Timezone (IANA)</label>
+                  <input id="field-timezone" name="schedule.timezone" type="text" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-hoursToGenerate">Hours to generate</label>
+                  <input id="field-hoursToGenerate" name="schedule.hoursToGenerate" type="number" min="1" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-defaultStart">Default start (HH:MM)</label>
+                  <input id="field-defaultStart" name="schedule.defaultStartTime" type="text" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-defaultEnd">Default end (HH:MM)</label>
+                  <input id="field-defaultEnd" name="schedule.defaultEndTime" type="text" />
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <h2>UI</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field">
+                  <label for="field-uiTitle">Title</label>
+                  <input id="field-uiTitle" name="ui.title" type="text" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-defaultPage">Default Ceefax page</label>
+                  <input id="field-defaultPage" name="ui.defaultPage" type="number" min="1" />
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <h2>Media scanning</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field admin-field-full">
+                  <label for="field-videoExtensions">Video extensions (comma-separated)</label>
+                  <input id="field-videoExtensions" name="videoExtensions" type="text" />
+                </div>
+                <div class="admin-field admin-field-full">
+                  <label for="field-audioExtensions">Audio extensions (comma-separated)</label>
+                  <input id="field-audioExtensions" name="audioExtensions" type="text" />
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <h2>Ads</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field admin-field-checkbox">
+                  <label><input id="field-adsEnabled" name="ads.enabled" type="checkbox" /> Ads enabled</label>
+                </div>
+                <div class="admin-field admin-field-full">
+                  <label for="field-adsPath">Ads folder (absolute path)</label>
+                  <input id="field-adsPath" name="ads.path" type="text" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-breakMin">Break min ads</label>
+                  <input id="field-breakMin" name="ads.breakMinAds" type="number" min="1" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-breakMax">Break max ads</label>
+                  <input id="field-breakMax" name="ads.breakMaxAds" type="number" min="1" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-intervalMin">Interval (minutes)</label>
+                  <input id="field-intervalMin" name="ads.intervalMinutes" type="number" min="1" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-intervalJitter">Interval jitter (minutes)</label>
+                  <input id="field-intervalJitter" name="ads.intervalJitterMinutes" type="number" min="0" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-programEndGuard">Program end guard (minutes)</label>
+                  <input id="field-programEndGuard" name="ads.programEndGuardMinutes" type="number" min="0" />
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <h2>Global test card</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field admin-field-full">
+                  <label for="field-testPattern">Path (file or folder)</label>
+                  <input id="field-testPattern" name="testPattern.path" type="text" />
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <h2>Transcode</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field admin-field-checkbox">
+                  <label><input id="field-transcodeEnabled" name="transcode.enabled" type="checkbox" /> Transcode enabled</label>
+                </div>
+                <div class="admin-field admin-field-full">
+                  <label for="field-cachePath">Cache path</label>
+                  <input id="field-cachePath" name="transcode.cachePath" type="text" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-maxConcurrent">Max concurrent jobs</label>
+                  <input id="field-maxConcurrent" name="transcode.maxConcurrentJobs" type="number" min="1" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-maxHeight">Max height</label>
+                  <input id="field-maxHeight" name="transcode.maxHeight" type="number" min="0" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-scheduleAhead">Schedule ahead (days)</label>
+                  <input id="field-scheduleAhead" name="transcode.scheduleAheadDays" type="number" min="1" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-videoCodec">Video codec</label>
+                  <input id="field-videoCodec" name="transcode.videoCodec" type="text" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-audioCodec">Audio codec</label>
+                  <input id="field-audioCodec" name="transcode.audioCodec" type="text" />
+                </div>
+                <div class="admin-field">
+                  <label for="field-preset">FFmpeg preset</label>
+                  <input id="field-preset" name="transcode.preset" type="text" />
+                </div>
+                <div class="admin-field admin-field-full">
+                  <label for="field-nativeVideo">Native video codecs (comma-separated)</label>
+                  <input id="field-nativeVideo" name="transcode.nativeVideoCodecs" type="text" />
+                </div>
+                <div class="admin-field admin-field-full">
+                  <label for="field-nativeAudio">Native audio codecs (comma-separated)</label>
+                  <input id="field-nativeAudio" name="transcode.nativeAudioCodecs" type="text" />
+                </div>
+                <div class="admin-field admin-field-full">
+                  <label for="field-probeExt">Probe extensions (comma-separated)</label>
+                  <input id="field-probeExt" name="transcode.probeExtensions" type="text" />
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <h2>Library</h2>
+              <div class="admin-form-grid">
+                <div class="admin-field admin-field-checkbox">
+                  <label><input id="field-rescanOnStartup" name="library.rescanOnStartup" type="checkbox" /> Rescan on startup</label>
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-card">
+              <div class="admin-controls">
+                <button type="submit" class="admin-btn">Save settings</button>
+                <button type="button" id="reload-btn" class="admin-btn admin-btn-secondary">Reload from server</button>
+              </div>
+              <p id="form-error" class="admin-error" hidden></p>
+            </section>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script src="/admin/js/admin-common.js"></script>
+    <script src="/admin/js/settings.js"></script>
+  </body>
+</html>

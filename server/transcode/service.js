@@ -55,6 +55,29 @@ class TranscodeService {
     return this.settings.enabled && Boolean(this.cacheDir) && this.ffmpegStatus.ok;
   }
 
+  applyAppConfig(appConfig) {
+    const previousCacheDir = this.cacheDir;
+    this.settings = normalizeTranscodeConfig(appConfig);
+    this.cacheDir = resolveCacheDirectory(this.settings.cachePath, this.projectRoot);
+    if (
+      previousCacheDir
+      && this.cacheDir
+      && path.resolve(previousCacheDir) !== path.resolve(this.cacheDir)
+      && fs.existsSync(previousCacheDir)
+    ) {
+      try {
+        const entries = fs.readdirSync(previousCacheDir);
+        if (entries.length > 0) {
+          console.warn(
+            `Transcode cache path changed; previous cache directory still contains ${entries.length} item(s): ${previousCacheDir}`,
+          );
+        }
+      } catch {
+        // ignore unreadable previous cache dir
+      }
+    }
+  }
+
   async enrichChannelVideos(channel) {
     if (channel.mediaType === 'audio' || !this.settings.enabled) {
       for (const video of channel.videos) {

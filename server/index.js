@@ -1,7 +1,17 @@
 const express = require('express');
 const path = require('path');
-const { loadConfig, resolveChannelsRoot } = require('./config');
-const { createChannelRepository } = require('./library');
+const { loadBootstrapConfig } = require('./config');
+const { createChannelRepository, openLibraryDatabase } = require('./library');
+const {
+  initializeAppSettings,
+  reloadAppConfigFromDb,
+  upsertSettingsRows,
+} = require('./library/appSettings');
+const {
+  classifyInvalidation,
+  prepareSettingsUpdate,
+  settingsChangeNeedsRestart,
+} = require('./library/adminSettings');
 const { loadAdsLibrary } = require('./ads');
 const { resolveNowPlaying, getDateKey } = require('./scheduler');
 const {
@@ -15,7 +25,7 @@ const {
   resolveConfiguredTestPatternPath,
   resolveEffectiveTestCardPath,
 } = require('./testPattern');
-const { createTranscodeService, findVideoByFilename } = require('./transcode');
+const { createTranscodeService } = require('./transcode');
 const {
   createAdminChannel,
   deleteAdminChannel,
@@ -28,9 +38,44 @@ const {
   upsertTranscodeCacheEntry,
 } = require('./library/transcodeCacheDb');
 
-const config = loadConfig();
-const projectRoot = path.dirname(config.configPath);
-const channelsRoot = resolveChannelsRoot(config);
+const bootstrap = loadBootstrapConfig();
+const projectRoot = bootstrap.projectRoot;
+
+const dbConnection = openLibraryDatabase(bootstrap.databasePath, projectRoot);
+if (!dbConnection) {
+  console.error(
+    `Failed to open database at "${bootstrap.databasePath}". Check databasePath in config.json.`,
+  );
+  process.exit(1);
+}
+
+if (bootstrap.legacyJsonKeysIgnored) {
+  console.warn(
+    'Non-databasePath keys in config.json / config.local.json are ignored; application settings are loaded from the database.',
+  );
+}
+
+const settingsRuntime = initializeAppSettings(dbConnection.db, bootstrap);
+let appConfig = settingsRuntime.config;
+let listenState = settingsRuntime.listen;
+
+function getConfig() {
+  return appConfig;
+}
+
+function getListen() {
+  return listenState;
+}
+
+function syncRepositoryFromConfig() {
+  const config = getConfig();
+  channelRepository.scanOptions = {
+    videoExtensions: config.videoExtensions,
+    audioExtensions: config.audioExtensions,
+  };
+  channelRepository.transcodeSettings = config.transcode || null;
+  libraryRuntime.library.rescanOnStartup = config.library?.rescanOnStartup === true;
+}
 const publicDir = path.join(__dirname, '..', 'public');
 
 const app = express();
@@ -38,8 +83,11 @@ let channels = [];
 let adsLibrary = null;
 let globalTestCardPath = null;
 let scanTimer = null;
-const transcodeService = createTranscodeService(config, projectRoot);
-const libraryRuntime = createChannelRepository(config, { projectRoot, channelsRoot });
+const transcodeService = createTranscodeService(appConfig, projectRoot);
+const libraryRuntime = createChannelRepository(appConfig, {
+  projectRoot,
+  dbConnection,
+});
 
 if (libraryRuntime.dbConnection?.db) {
   transcodeService.onTranscodeComplete = (info) => {
@@ -57,11 +105,7 @@ const scheduleService = libraryRuntime.scheduleService;
 const mediaCatalogue = libraryRuntime.mediaCatalogue;
 
 function resolveProgrammeVideo(channel, filename) {
-  if (mediaCatalogue) {
-    return mediaCatalogue.getProgramme(channel.id, filename);
-  }
-
-  return findVideoByFilename(channel, filename);
+  return mediaCatalogue.getProgramme(channel.id, filename);
 }
 
 function programmeCount(channel) {
@@ -73,7 +117,7 @@ function identCount(channel) {
 }
 
 function scheduleAheadDays() {
-  const days = Number(config.transcode?.scheduleAheadDays);
+  const days = Number(getConfig().transcode?.scheduleAheadDays);
   return Number.isFinite(days) && days >= 1 ? days : 1;
 }
 
@@ -100,15 +144,13 @@ function serializeChannel(channel) {
     programmeCount: programmeCount(channel),
     identCount: identCount(channel),
     hasTestCard: Boolean(channel.testCardPath || globalTestCardPath),
-    totalDurationSeconds: channel.totalDurationSeconds ?? channel.videos.reduce(
-      (sum, video) => sum + (video.durationSeconds || 0),
-      0,
-    ),
-    catalogueInDb: channel.catalogueInDb === true,
+    totalDurationSeconds: channel.totalDurationSeconds ?? 0,
+    catalogueInDb: true,
   };
 }
 
 function scheduleOptions(date = new Date()) {
+  const config = getConfig();
   return {
     date,
     timezone: config.schedule.timezone,
@@ -120,13 +162,10 @@ function scheduleOptions(date = new Date()) {
 }
 
 function countUnplayableMedia(channelList) {
-  return channelList.reduce((count, channel) => {
-    if (channel.catalogueInDb) {
-      return count + (channel.unplayableProgrammeCount || 0);
-    }
-
-    return count + channel.videos.filter((video) => !video.durationSeconds).length;
-  }, 0);
+  return channelList.reduce(
+    (count, channel) => count + (channel.unplayableProgrammeCount || 0),
+    0,
+  );
 }
 
 function applyTranscodeToNowPlaying(channel, current) {
@@ -154,10 +193,8 @@ function applyTranscodeToNowPlaying(channel, current) {
 }
 
 function requireDatabaseAdmin(_req, res, next) {
-  if (channelRepository.mode !== 'database' || !libraryRuntime.dbConnection?.db) {
-    res.status(503).json({
-      error: 'Admin channel management requires library.mode "database" and library.databasePath',
-    });
+  if (!libraryRuntime.dbConnection?.db) {
+    res.status(503).json({ error: 'Admin tools require a connected library database.' });
     return;
   }
 
@@ -201,18 +238,69 @@ async function rebuildSchedulesForRuntime(channelId = null) {
   refreshTranscodeQueueOnly();
 }
 
+function configureScanTimer() {
+  if (scanTimer) {
+    clearInterval(scanTimer);
+    scanTimer = null;
+  }
+
+  const config = getConfig();
+  if (config.scanIntervalMinutes > 0) {
+    scanTimer = setInterval(() => {
+      refreshChannels({ forceReconcile: true });
+    }, config.scanIntervalMinutes * 60 * 1000);
+  }
+}
+
+async function applySettingsInvalidation(changedKeys) {
+  const flags = classifyInvalidation(changedKeys);
+  syncRepositoryFromConfig();
+  transcodeService.applyAppConfig(getConfig());
+
+  if (flags.testPattern) {
+    globalTestCardPath = resolveConfiguredTestPatternPath(
+      getConfig().testPattern?.path,
+      projectRoot,
+    );
+  }
+
+  if (flags.ads || flags.testPattern) {
+    adsLibrary = await loadAdsLibrary(getConfig());
+  }
+
+  if (flags.schedule || flags.ads) {
+    scheduleService.invalidateAll();
+    scheduleService.ensureAhead(
+      channels,
+      scheduleOptions,
+      scheduleAheadDays(),
+      { force: true },
+    );
+  } else if (flags.transcode) {
+    scheduleService.ensureAhead(
+      channels,
+      scheduleOptions,
+      scheduleAheadDays(),
+      { force: false },
+    );
+  }
+
+  if (flags.transcode || flags.schedule || flags.ads) {
+    refreshTranscodeQueueOnly();
+  }
+
+  if (flags.scanInterval) {
+    configureScanTimer();
+  }
+}
+
 async function refreshChannels(options = {}) {
   const forceReconcile = options.forceReconcile === true;
   const rescanOnStartup = options.rescanOnStartup === true;
   channels = await channelRepository.rescanAll({ forceReconcile, rescanOnStartup });
+  const config = getConfig();
   adsLibrary = await loadAdsLibrary(config);
   globalTestCardPath = resolveConfiguredTestPatternPath(config.testPattern?.path, projectRoot);
-
-  if (!mediaCatalogue) {
-    for (const channel of channels) {
-      await transcodeService.enrichChannelVideos(channel);
-    }
-  }
 
   const rebuildSchedules = forceReconcile || rescanOnStartup;
 
@@ -239,7 +327,7 @@ async function refreshChannels(options = {}) {
   const mediaCount = channels.reduce((sum, channel) => sum + programmeCount(channel), 0);
   const unplayableCount = countUnplayableMedia(channels);
 
-  const libraryLabel = channelRepository.mode === 'database' ? 'library database' : channelsRoot;
+  const libraryLabel = 'library database';
   console.log(`Loaded ${channels.length} channel(s), ${mediaCount} programme(s) from ${libraryLabel}`);
   if (adsLibrary.active) {
     console.log(`Loaded ${adsLibrary.ads.length} ad(s) from ${adsLibrary.config.path}`);
@@ -258,16 +346,31 @@ async function refreshChannels(options = {}) {
 app.use(express.json());
 app.use(express.static(publicDir));
 
+app.get('/api/settings/public', (_req, res) => {
+  const config = getConfig();
+  res.json({
+    title: config.ui?.title || 'The Box',
+    defaultPage: config.ui?.defaultPage ?? 100,
+    timezone: config.schedule?.timezone || 'Europe/London',
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     channels: channels.length,
-    channelsRoot,
+    settingsSource: 'database',
+    appSettingsKeyCount: settingsRuntime.settingsKeyCount,
+    listenHost: getListen().host,
+    listenPort: getListen().port,
+    listenPortSource: getListen().portSource,
+    listenHostSource: getListen().hostSource,
+    legacyJsonKeysIgnored: bootstrap.legacyJsonKeysIgnored,
     library: {
-      mode: channelRepository.mode,
+      mode: 'database',
       databasePath: libraryRuntime.dbConnection?.path || null,
       schedulesCached: scheduleService.enabled,
-      slimCatalogue: Boolean(mediaCatalogue),
+      slimCatalogue: true,
     },
   });
 });
@@ -285,23 +388,15 @@ app.get('/api/channels/:id', (req, res) => {
 
   const payload = { ...serializeChannel(channel) };
 
-  if (mediaCatalogue) {
-    const listVideos = req.query.videos === '1' || req.query.videos === 'true';
-    const limit = Number.parseInt(req.query.limit, 10);
-    const offset = Number.parseInt(req.query.offset, 10) || 0;
+  const listVideos = req.query.videos === '1' || req.query.videos === 'true';
+  const limit = Number.parseInt(req.query.limit, 10);
+  const offset = Number.parseInt(req.query.offset, 10) || 0;
 
-    if (listVideos || Number.isFinite(limit)) {
-      payload.videos = mediaCatalogue.listProgrammeSummaries(channel.id, {
-        limit: Number.isFinite(limit) ? limit : 100,
-        offset,
-      });
-    }
-  } else {
-    payload.videos = channel.videos.map((video) => ({
-      filename: video.filename,
-      title: video.title,
-      durationSeconds: video.durationSeconds,
-    }));
+  if (listVideos || Number.isFinite(limit)) {
+    payload.videos = mediaCatalogue.listProgrammeSummaries(channel.id, {
+      limit: Number.isFinite(limit) ? limit : 100,
+      offset,
+    });
   }
 
   res.json(payload);
@@ -328,7 +423,7 @@ app.get('/api/channels/:id/schedule', (req, res) => {
   res.json({
     ...withTranscode,
     meta: {
-      timezone: config.schedule.timezone,
+      timezone: getConfig().schedule.timezone,
       adsLibraryActive: adsLibrary?.active === true,
       channelAdsEnabled: channel.adsEnabled === true,
       identInterval: channel.identInterval ?? 0,
@@ -355,9 +450,7 @@ app.get('/api/channels/:id/now', (req, res) => {
       return;
     }
 
-    const unplayableCount = channel.catalogueInDb
-      ? (channel.unplayableProgrammeCount || 0)
-      : channel.videos.filter((video) => !video.durationSeconds).length;
+    const unplayableCount = channel.unplayableProgrammeCount || 0;
 
     if (programmeCount(channel) === 0) {
       res.status(404).json({
@@ -408,18 +501,76 @@ app.get('/api/guide', (req, res) => {
     : new Date();
 
   res.json({
-    date: getDateKey(date, config.schedule.timezone),
+    date: getDateKey(date, getConfig().schedule.timezone),
     channels: scheduleService.generateGuide(channels, scheduleOptions(date)),
   });
 });
 
 app.get('/api/admin/library', requireDatabaseAdmin, (_req, res) => {
   res.json({
-    mode: channelRepository.mode,
+    mode: 'database',
     databasePath: libraryRuntime.dbConnection.path,
-    channelsRoot,
     schedulesCached: scheduleService.enabled,
     slimCatalogue: Boolean(mediaCatalogue),
+  });
+});
+
+app.get('/api/admin/settings', requireDatabaseAdmin, (_req, res) => {
+  const listen = getListen();
+  res.json({
+    settings: getConfig(),
+    listen: {
+      host: listen.host,
+      port: listen.port,
+      portSource: listen.portSource,
+      hostSource: listen.hostSource,
+      envOverrides: listen.envOverrides,
+      databaseHost: getConfig().host,
+      databasePort: getConfig().port,
+    },
+  });
+});
+
+app.put('/api/admin/settings', requireDatabaseAdmin, async (req, res) => {
+  const patch = req.body?.settings ?? req.body;
+  const result = prepareSettingsUpdate(getConfig(), patch);
+
+  if (!result.ok) {
+    res.status(400).json({ error: 'Validation failed', details: result.errors });
+    return;
+  }
+
+  const db = libraryRuntime.dbConnection.db;
+  db.transaction(() => {
+    upsertSettingsRows(db, result.rows);
+  })();
+
+  const reloaded = reloadAppConfigFromDb(db);
+  appConfig = reloaded.config;
+  listenState = reloaded.listen;
+  settingsRuntime.settingsKeyCount = reloaded.settingsKeyCount;
+
+  await applySettingsInvalidation(result.changedKeys);
+
+  const listen = getListen();
+  const restartRequired =
+    settingsChangeNeedsRestart(result.changedKeys)
+    && ((result.changedKeys.includes('host') && !listen.envOverrides.host)
+      || (result.changedKeys.includes('port') && !listen.envOverrides.port));
+
+  res.json({
+    settings: getConfig(),
+    listen: {
+      host: listen.host,
+      port: listen.port,
+      portSource: listen.portSource,
+      hostSource: listen.hostSource,
+      envOverrides: listen.envOverrides,
+      databaseHost: getConfig().host,
+      databasePort: getConfig().port,
+    },
+    restartRequired,
+    changedKeys: result.changedKeys,
   });
 });
 
@@ -506,7 +657,7 @@ app.delete('/api/admin/channels/:id', requireDatabaseAdmin, async (req, res) => 
 
 app.post('/api/admin/channels/:id/rescan', requireDatabaseAdmin, async (req, res) => {
   if (!channelRepository.reconcileOneChannel) {
-    res.status(503).json({ error: 'Channel rescan is only available in database mode' });
+    res.status(503).json({ error: 'Channel rescan is unavailable.' });
     return;
   }
 
@@ -529,25 +680,6 @@ app.post('/api/admin/rebuild-schedules', requireDatabaseAdmin, async (req, res) 
   res.json({ ok: true, channelId });
 });
 
-app.post('/api/admin/import-from-folders', requireDatabaseAdmin, async (_req, res) => {
-  if (!channelRepository.importFromChannelsRoot) {
-    res.status(503).json({ error: 'Import requires database mode' });
-    return;
-  }
-
-  const imported = await channelRepository.importFromChannelsRoot();
-  channels = channelRepository.getChannels();
-  scheduleService.invalidateAll?.();
-  scheduleService.ensureAhead?.(
-    channels,
-    scheduleOptions,
-    scheduleAheadDays(),
-    { force: true },
-  );
-  refreshTranscodeQueueOnly();
-  res.json({ ok: true, imported, channels: channels.length });
-});
-
 app.get('/api/admin/transcode-cache', requireDatabaseAdmin, (req, res) => {
   const result = lookupTranscodeCache(libraryRuntime.dbConnection.db, req.query.key || '');
   if (!result.cacheKey) {
@@ -566,9 +698,8 @@ app.post('/api/admin/rescan', async (_req, res) => {
 app.get('/media/ads/*', createAdMediaHandler(() => adsLibrary));
 app.get('/media/testcard/global', createGlobalTestCardHandler(() => globalTestCardPath));
 app.get('/media/:channelId/testcard', createChannelTestCardHandler(getChannelById));
-const resolveMediaItem = mediaCatalogue
-  ? (channel, filename, mediaType) => mediaCatalogue.getMediaItem(channel.id, filename, mediaType)
-  : null;
+const resolveMediaItem = (channel, filename, mediaType) =>
+  mediaCatalogue.getMediaItem(channel.id, filename, mediaType);
 
 app.get(
   '/media/:channelId/ident/*',
@@ -617,26 +748,27 @@ async function start() {
     },
   );
 
-  if (config.scanIntervalMinutes > 0) {
-    const intervalRescan = () => {
-      const reconcile = channelRepository.mode === 'database';
-      refreshChannels({ forceReconcile: reconcile });
-    };
-    scanTimer = setInterval(intervalRescan, config.scanIntervalMinutes * 60 * 1000);
-  }
+  configureScanTimer();
 
-  const server = app.listen(config.port, config.host, () => {
-    console.log(`${config.ui.title} running at http://localhost:${config.port}`);
-    console.log(`Channels root: ${channelsRoot}`);
-    if (config.localConfigPath) {
-      console.log(`Config overrides: ${config.localConfigPath}`);
+  const config = getConfig();
+  const listen = getListen();
+  const server = app.listen(listen.port, listen.host, () => {
+    console.log(`${config.ui.title} running at http://${listen.host}:${listen.port}`);
+    if (listen.portSource === 'env' || listen.hostSource === 'env') {
+      console.log(
+        `Listen address from environment (HOST/PORT); database has host=${config.host} port=${config.port}.`,
+      );
+    }
+    console.log(`Database: ${libraryRuntime.dbConnection.path}`);
+    if (bootstrap.localConfigPath) {
+      console.log(`Database path override: ${bootstrap.localConfigPath}`);
     }
   });
 
   server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       console.error(
-        `Port ${config.port} is already in use. Stop the other process or change "port" in config.json.`,
+        `Port ${getListen().port} is already in use. Stop the other process or change port in Admin → Settings (or set PORT).`,
       );
     } else {
       console.error('Failed to start The Box:', error.message);

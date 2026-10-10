@@ -6,7 +6,7 @@ const clockText = document.getElementById('clock-text');
 const maxLogEntries = 30;
 
 function updateClock() {
-  clockText.textContent = new Date().toLocaleString();
+  clockText.textContent = TheBox.formatLocalDateTime();
 }
 
 function formatKeyEvent(event) {
@@ -70,9 +70,15 @@ TheBox.remote.register('remote-test', {
   },
 });
 
-updateClock();
-setInterval(updateClock, 1000);
-setInterval(() => {
-  pageBufferDisplay.textContent = TheBox.remote.pageBuffer || '—';
-}, 200);
-TheBox.remote.mountPage('remote-test');
+async function bootRemoteTestPage() {
+  await TheBox.ready;
+  TheBox.applyDocumentTitle('Remote Test');
+  updateClock();
+  setInterval(updateClock, 1000);
+  setInterval(() => {
+    pageBufferDisplay.textContent = TheBox.remote.pageBuffer || '—';
+  }, 200);
+  TheBox.remote.mountPage('remote-test');
+}
+
+bootRemoteTestPage();

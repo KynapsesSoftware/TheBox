@@ -1,4 +1,6 @@
-:root {
+:root,
+[data-admin-theme='dark'] {
+  color-scheme: dark;
   --admin-bg: #0f1419;
   --admin-surface: #1a2332;
   --admin-surface-2: #243044;
@@ -7,19 +9,56 @@
   --admin-muted: #8b9cb3;
   --admin-accent: #3b82f6;
   --admin-accent-hover: #2563eb;
+  --admin-on-accent: #ffffff;
   --admin-success: #22c55e;
   --admin-warning: #eab308;
   --admin-danger: #ef4444;
   --admin-magenta: #c084fc;
+  --admin-slot-programme-part: #a5f3fc;
+  --admin-slot-ad-bg: rgba(234, 179, 8, 0.08);
+  --admin-slot-ident-bg: rgba(192, 132, 252, 0.1);
+  --admin-slot-now-bg: rgba(34, 197, 94, 0.08);
   --admin-radius: 8px;
   --admin-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --admin-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
   --admin-input-bg: var(--admin-bg);
   --admin-input-bg-hover: #121820;
   --admin-input-border: var(--admin-border);
+  --admin-input-border-hover: #3d4d66;
   --admin-input-border-focus: var(--admin-accent);
   --admin-input-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   --admin-input-shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+[data-admin-theme='light'] {
+  color-scheme: light;
+  --admin-bg: #eef1f6;
+  --admin-surface: #ffffff;
+  --admin-surface-2: #f3f5f9;
+  --admin-border: #d0d7e2;
+  --admin-text: #1a2332;
+  --admin-muted: #5c6b82;
+  --admin-accent: #2563eb;
+  --admin-accent-hover: #1d4ed8;
+  --admin-on-accent: #ffffff;
+  --admin-success: #16a34a;
+  --admin-warning: #ca8a04;
+  --admin-danger: #dc2626;
+  --admin-magenta: #9333ea;
+  --admin-slot-programme-part: #0e7490;
+  --admin-slot-ad-bg: rgba(234, 179, 8, 0.15);
+  --admin-slot-ident-bg: rgba(147, 51, 234, 0.08);
+  --admin-slot-now-bg: rgba(22, 163, 74, 0.12);
+  --admin-input-bg: #ffffff;
+  --admin-input-bg-hover: #f8fafc;
+  --admin-input-border: #c5cedb;
+  --admin-input-border-hover: #94a3b8;
+  --admin-input-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --admin-input-shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.22);
+}
+
+[data-admin-theme='light'] .admin-field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235c6b82' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
 }
 
 *,
@@ -104,7 +143,7 @@ a:hover {
 
 .admin-nav a.is-active {
   background: var(--admin-accent);
-  color: #fff;
+  color: var(--admin-on-accent);
 }
 
 .admin-sidebar-footer {
@@ -133,6 +172,47 @@ a:hover {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.admin-btn.admin-theme-toggle {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--admin-text);
+}
+
+.admin-theme-toggle__svg {
+  width: 1.375rem;
+  height: 1.375rem;
+  display: block;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.admin-theme-toggle__svg path,
+.admin-theme-toggle__svg circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .admin-status {
@@ -155,6 +235,12 @@ a:hover {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius);
   padding: 1.25rem;
+}
+
+#settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .admin-card h2 {
@@ -265,8 +351,8 @@ a:hover {
 .admin-field input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not(:read-only),
 .admin-field select:hover:not(:disabled),
 .admin-field textarea:hover:not(:disabled):not(:read-only) {
-  border-color: #3d4d66;
-  background: var(--admin-input-bg-hover);
+  border-color: var(--admin-input-border-hover);
+  background-color: var(--admin-input-bg-hover);
 }
 
 .admin-input:focus,
@@ -384,7 +470,7 @@ a:hover {
 }
 
 .admin-legend-item.slot-programme { color: var(--admin-text); }
-.admin-legend-item.slot-programme-part { color: #67e8f9; }
+.admin-legend-item.slot-programme-part { color: var(--admin-slot-programme-part); }
 .admin-legend-item.slot-ad { color: var(--admin-warning); }
 .admin-legend-item.slot-ident { color: var(--admin-magenta); }
 .admin-legend-item.slot-now { color: var(--admin-success); }
@@ -427,13 +513,13 @@ a:hover {
 }
 
 .admin-table tbody tr.slot-programme { color: var(--admin-text); }
-.admin-table tbody tr.slot-programme-part { color: #a5f3fc; }
-.admin-table tbody tr.slot-ad { background: rgba(234, 179, 8, 0.08); }
-.admin-table tbody tr.slot-ident { background: rgba(192, 132, 252, 0.1); }
+.admin-table tbody tr.slot-programme-part { color: var(--admin-slot-programme-part); }
+.admin-table tbody tr.slot-ad { background: var(--admin-slot-ad-bg); }
+.admin-table tbody tr.slot-ident { background: var(--admin-slot-ident-bg); }
 .admin-table tbody tr.slot-now {
   outline: 2px solid var(--admin-success);
   outline-offset: -2px;
-  background: rgba(34, 197, 94, 0.08);
+  background: var(--admin-slot-now-bg);
 }
 
 .admin-table .col-num {

@@ -7,7 +7,7 @@ const statusText = document.getElementById('status-text');
 const clockText = document.getElementById('clock-text');
 
 function updateClock() {
-  clockText.textContent = new Date().toLocaleString();
+  clockText.textContent = TheBox.formatLocalDateTime();
 }
 
 TheBox.remote.register('index', {
@@ -89,6 +89,23 @@ async function renderChannels() {
   }
 }
 
-updateClock();
-setInterval(updateClock, 1000);
-renderChannels();
+async function bootIndexPage() {
+  await TheBox.ready;
+  TheBox.applyDocumentTitle('Home');
+
+  const defaultPage = TheBox.publicSettings?.defaultPage ?? 100;
+  const onHomePath =
+    window.location.pathname === '/'
+    || window.location.pathname.endsWith('/index.html');
+
+  if (onHomePath && defaultPage !== 100 && TheBox.remote.pages[defaultPage]) {
+    TheBox.remote.goToPageNumber(defaultPage);
+    return;
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
+  renderChannels();
+}
+
+bootIndexPage();

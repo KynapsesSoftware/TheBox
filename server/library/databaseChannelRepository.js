@@ -3,7 +3,6 @@ const { countChannels, getAllChannelRows } = require('./channelDb');
 const { getChannelRow, getMediaRow } = require('./channelDb');
 const {
   hydrateAllChannelsSlim,
-  importFromChannelsRoot,
   reconcileChannelMedia,
 } = require('./channelCatalogue');
 
@@ -11,16 +10,12 @@ class DatabaseChannelRepository {
   constructor({
     db,
     library,
-    channelsRoot,
     scanOptions,
-    projectRoot,
     transcodeSettings,
   }) {
     this.db = db;
     this.library = library;
-    this.channelsRoot = channelsRoot;
     this.scanOptions = scanOptions;
-    this.projectRoot = projectRoot;
     this.transcodeSettings = transcodeSettings || null;
     this._channels = [];
   }
@@ -36,25 +31,13 @@ class DatabaseChannelRepository {
   async rescanAll(options = {}) {
     const forceReconcile = options.forceReconcile === true;
     const rescanOnStartup = options.rescanOnStartup === true;
-    let channelCount = countChannels(this.db);
-
-    if (channelCount === 0 && this.library.startupScan === 'if-empty') {
-      const imported = await importFromChannelsRoot(this.db, {
-        channelsRoot: this.channelsRoot,
-        scanOptions: this.scanOptions,
-        projectRoot: this.projectRoot,
-        transcodeSettings: this.transcodeSettings,
-      });
-      console.log(`Library import: seeded ${imported} channel(s) from ${this.channelsRoot}`);
-      channelCount = imported;
-    }
+    const channelCount = countChannels(this.db);
 
     if (channelCount > 0 && (forceReconcile || rescanOnStartup)) {
       const rows = getAllChannelRows(this.db);
       for (const row of rows) {
         await reconcileChannelMedia(this.db, row, {
           scanOptions: this.scanOptions,
-          channelsRoot: this.channelsRoot,
           transcodeSettings: this.transcodeSettings,
         });
       }
@@ -72,23 +55,11 @@ class DatabaseChannelRepository {
 
     await reconcileChannelMedia(this.db, row, {
       scanOptions: this.scanOptions,
-      channelsRoot: this.channelsRoot,
       transcodeSettings: this.transcodeSettings,
     });
 
     this._channels = hydrateAllChannelsSlim(this.db);
     return true;
-  }
-
-  async importFromChannelsRoot() {
-    const count = await importFromChannelsRoot(this.db, {
-      channelsRoot: this.channelsRoot,
-      scanOptions: this.scanOptions,
-      projectRoot: this.projectRoot,
-      transcodeSettings: this.transcodeSettings,
-    });
-    this._channels = hydrateAllChannelsSlim(this.db);
-    return count;
   }
 
   getMediaPath(channelId, mediaPath, mediaType = 'video') {
@@ -99,7 +70,7 @@ class DatabaseChannelRepository {
   }
 
   close() {
-    // Database connection closed by library runtime.
+    this._channels = [];
   }
 }
 

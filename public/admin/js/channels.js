@@ -216,16 +216,6 @@ document.getElementById('rebuild-channel-btn').addEventListener('click', async (
   setStatus('Schedule rebuilt');
 });
 
-document.getElementById('import-btn').addEventListener('click', async () => {
-  if (!window.confirm('Import/merge all channels from channelsRoot into the database?')) {
-    return;
-  }
-
-  setStatus('Importing…');
-  await fetch('/api/admin/import-from-folders', { method: 'POST' });
-  await loadChannels();
-});
-
 document.getElementById('rebuild-all-btn').addEventListener('click', async () => {
   setStatus('Rebuilding schedules…');
   await fetch('/api/admin/rebuild-schedules', {

@@ -9,7 +9,20 @@ async function apiGet(path) {
 
 function formatClock(dateInput) {
   const date = new Date(dateInput);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const options = { hour: '2-digit', minute: '2-digit' };
+  if (window.TheBox?.scheduleTimezone) {
+    options.timeZone = window.TheBox.scheduleTimezone;
+  }
+  return date.toLocaleTimeString([], options);
+}
+
+function formatLocalDateTime(dateInput = new Date()) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  const options = { dateStyle: 'short', timeStyle: 'medium' };
+  if (window.TheBox?.scheduleTimezone) {
+    options.timeZone = window.TheBox.scheduleTimezone;
+  }
+  return date.toLocaleString([], options);
 }
 
 function formatDuration(seconds) {
@@ -25,14 +38,48 @@ function formatDuration(seconds) {
   return `${minutes}m`;
 }
 
+function applyDocumentTitle(pageLabel) {
+  const base = window.TheBox?.publicSettings?.title || 'The Box';
+  document.title = pageLabel ? `${base} - ${pageLabel}` : base;
+}
+
+async function loadPublicSettings() {
+  const defaults = {
+    title: 'The Box',
+    defaultPage: 100,
+    timezone: null,
+  };
+
+  try {
+    const settings = await apiGet('/api/settings/public');
+    window.TheBox.publicSettings = {
+      title: settings.title || defaults.title,
+      defaultPage: Number(settings.defaultPage) || defaults.defaultPage,
+      timezone: settings.timezone || null,
+    };
+  } catch {
+    window.TheBox.publicSettings = { ...defaults };
+  }
+
+  window.TheBox.scheduleTimezone = window.TheBox.publicSettings.timezone;
+  return window.TheBox.publicSettings;
+}
+
 window.TheBox = {
-  // Set to true on any page to show the design / developer guide overlay
   devGuideEnabled: false,
-  // Set to false to disable media remote / keyboard control
   remoteEnabled: true,
-  // Set to true to show page number entry in the top-right corner
   remotePageOsdEnabled: true,
+  publicSettings: {
+    title: 'The Box',
+    defaultPage: 100,
+    timezone: null,
+  },
+  scheduleTimezone: null,
   apiGet,
+  applyDocumentTitle,
   formatClock,
   formatDuration,
+  formatLocalDateTime,
+  loadPublicSettings,
+  ready: loadPublicSettings(),
 };

@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Box — Admin</title>
+    <script src="/admin/js/admin-theme-init.js"></script>
     <link rel="stylesheet" href="/admin/css/admin.css" />
   </head>
   <body class="admin-app">
@@ -38,10 +39,16 @@
             <h2>Tools</h2>
             <ul class="admin-tool-list">
               <li>
+                <h3><a href="/admin/settings.html">Settings</a></h3>
+                <p>
+                  Global server, schedule, ads, transcode, and library options stored in the SQLite
+                  <code>app_settings</code> table.
+                </p>
+              </li>
+              <li>
                 <h3><a href="/admin/channels.html">Channels</a></h3>
                 <p>
-                  Create, edit, and delete channels in the SQLite catalogue; rescan media, rebuild schedules,
-                  or import from legacy <code>channelsRoot</code> folders (database mode).
+                  Create, edit, and delete channels in the SQLite catalogue; rescan media and rebuild schedules.
                 </p>
               </li>
               <li>

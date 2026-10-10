@@ -15,7 +15,6 @@ CREATE TABLE IF NOT EXISTS channels (
   ident_path TEXT,
   testcard_path TEXT,
   artwork_path TEXT,
-  folder_name TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -84,8 +83,29 @@ function applySchemaVersion4(db) {
   db.exec(TRANSCODE_CACHE_DDL);
 }
 
+const APP_SETTINGS_DDL = `
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+function applySchemaVersion5(db) {
+  db.exec(APP_SETTINGS_DDL);
+}
+
+function applySchemaVersion6(db) {
+  const columns = db.prepare('PRAGMA table_info(channels)').all();
+  if (columns.some((column) => column.name === 'folder_name')) {
+    db.exec('ALTER TABLE channels DROP COLUMN folder_name');
+  }
+}
+
 module.exports = {
   applySchemaVersion2,
   applySchemaVersion3,
   applySchemaVersion4,
+  applySchemaVersion5,
+  applySchemaVersion6,
 };
